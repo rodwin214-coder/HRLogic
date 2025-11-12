@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HR Core - Attendance Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+<style>
+  :root {
+    --color-primary: 79 70 229; /* indigo-600 */
+    --color-primary-hover: 67 56 202; /* indigo-700 */
+    --color-primary-light: 238 242 255; /* indigo-50 */
+    --color-secondary: 13 148 136; /* teal-600 */
+    --color-text-base: 51 65 85; /* slate-600 */
+    --color-text-muted: 100 116 139; /* slate-500 */
+    --color-text-heading: 15 23 42; /* slate-900 */
+    --color-bg: 248 250 252; /* slate-50 */
+    --color-surface: 255 255 255;
+    --color-border: 226 232 240; /* slate-200 */
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --rounded-sm: 0.25rem;
+    --rounded-md: 0.5rem;
+    --rounded-lg: 0.75rem;
+    --rounded-full: 9999px;
+  }
+
+  @keyframes fade-in {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in {
+      animation: fade-in 0.3s ease-out forwards;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-text-base));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .card {
+    background-color: rgb(var(--color-surface));
+    border-radius: var(--rounded-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgb(var(--color-border));
+    padding: 1.5rem;
+  }
+  
+  .input-field {
+      display: block;
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background-color: white;
+      border: 1px solid rgb(var(--color-border));
+      border-radius: var(--rounded-md);
+      font-size: 0.875rem;
+      color: rgb(var(--color-text-heading));
+      transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-field:focus {
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+      border-color: rgb(var(--color-primary));
+      box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.2);
+  }
+  .input-field.invalid {
+      border-color: #ef4444; /* red-500 */
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--rounded-md);
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    background-color: rgb(var(--color-primary));
+    color: white;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover {
+    background-color: rgb(var(--color-primary-hover));
+  }
+  .btn-primary:disabled {
+    background-color: rgb(var(--color-primary) / 0.5);
+    cursor: not-allowed;
+  }
+  
+  .btn-secondary {
+    background-color: rgb(var(--color-surface));
+    color: rgb(var(--color-text-base));
+    border-color: rgb(var(--color-border));
+     box-shadow: var(--shadow-sm);
+  }
+  .btn-secondary:hover {
+    background-color: rgb(241 245 249); /* slate-100 */
+  }
+
+  .status-badge {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: var(--rounded-full);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .status-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: var(--rounded-full);
+  }
+
+  .status-badge-pending {
+    color: #a16207; /* yellow-800 */
+    background-color: #fef9c3; /* yellow-100 */
+  }
+  .status-badge-pending::before {
+    background-color: #facc15; /* yellow-400 */
+  }
+
+  .status-badge-approved {
+    color: #166534; /* green-800 */
+    background-color: #dcfce7; /* green-100 */
+  }
+  .status-badge-approved::before {
+    background-color: #4ade80; /* green-400 */
+  }
+  
+  .status-badge-rejected {
+    color: #991b1b; /* red-800 */
+    background-color: #fee2e2; /* red-100 */
+  }
+  .status-badge-rejected::before {
+    background-color: #f87171; /* red-400 */
+  }
+  
+  .select-dark {
+    background-color: rgb(var(--color-text-base));
+    color: white;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.8rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 3rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  .select-dark option {
+    background-color: white;
+    color: rgb(var(--color-text-base));
+  }
+</style>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
