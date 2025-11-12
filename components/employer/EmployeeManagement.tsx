@@ -117,6 +117,28 @@ const EmployeeManagement: React.FC = () => {
         }
     };
 
+    const handleDelete = (employeeToDelete: Employee) => {
+        const confirmation = prompt(`This will PERMANENTLY DELETE ${employeeToDelete.firstName} ${employeeToDelete.lastName} and all associated data (attendance, requests, etc.). This action cannot be undone.\n\nTo confirm, please type DELETE below:`);
+        if (confirmation === 'DELETE') {
+            api.deleteEmployee(employeeToDelete.id);
+            fetchData();
+        } else {
+            alert('Deletion cancelled.');
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedEmployeeIds.length === 0) return;
+        const confirmation = prompt(`This will PERMANENTLY DELETE the ${selectedEmployeeIds.length} selected employees and all their associated data. This action cannot be undone.\n\nTo confirm, please type DELETE below:`);
+        if (confirmation === 'DELETE') {
+            api.bulkDeleteEmployees(selectedEmployeeIds);
+            fetchData();
+            setSelectedEmployeeIds([]);
+        } else {
+            alert('Deletion cancelled.');
+        }
+    };
+
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => 
             `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -202,7 +224,7 @@ const EmployeeManagement: React.FC = () => {
                         <button 
                             onClick={() => handleBulkAction(EmployeeStatus.TERMINATED)} 
                             disabled={!canTerminate}
-                            className="btn btn-secondary text-xs bg-red-50 text-red-700 border-red-200 hover:bg-red-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed"
+                            className="btn btn-secondary text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed"
                         >
                             Terminate Selected
                         </button>
@@ -212,6 +234,12 @@ const EmployeeManagement: React.FC = () => {
                             className="btn btn-secondary text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed"
                         >
                             Reactivate Selected
+                        </button>
+                        <button 
+                            onClick={handleBulkDelete} 
+                            className="btn btn-secondary text-xs bg-red-100 text-red-800 border-red-300 hover:bg-red-200"
+                        >
+                            Delete Selected
                         </button>
                     </div>
                 </div>
@@ -258,12 +286,13 @@ const EmployeeManagement: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button onClick={() => setSelectedEmployee(employee)} className="text-indigo-600 hover:text-indigo-900">View Details</button>
+                                    <button onClick={() => setSelectedEmployee(employee)} className="text-indigo-600 hover:text-indigo-900">Details</button>
                                     {employee.status === EmployeeStatus.ACTIVE ? (
-                                        <button onClick={() => handleStatusChange(employee, EmployeeStatus.TERMINATED)} className="ml-4 text-red-600 hover:text-red-900">Terminate</button>
+                                        <button onClick={() => handleStatusChange(employee, EmployeeStatus.TERMINATED)} className="ml-4 text-orange-600 hover:text-orange-900">Terminate</button>
                                     ) : (
                                         <button onClick={() => handleStatusChange(employee, EmployeeStatus.ACTIVE)} className="ml-4 text-green-600 hover:text-green-900">Reactivate</button>
                                     )}
+                                    <button onClick={() => handleDelete(employee)} className="ml-4 text-red-600 hover:text-red-900">Delete</button>
                                 </td>
                             </tr>
                         ))}
