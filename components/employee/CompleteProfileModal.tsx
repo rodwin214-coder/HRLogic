@@ -1,4 +1,5 @@
-import React, { useState, useContext, useCallback } from 'react';
+
+import React, { useState, useContext, useCallback, useEffect } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/mockApi';
 import { Employee } from '../../types';
@@ -6,6 +7,23 @@ import { Employee } from '../../types';
 interface CompleteProfileModalProps {
     onSuccess: () => void;
 }
+
+const EditField: React.FC<{
+    label: string, 
+    name: keyof Employee, 
+    value?: any, 
+    type?: string, 
+    required?: boolean, 
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
+    error?: string
+}> = ({label, name, value, type="text", required=false, onChange, error}) => (
+    <div>
+        <label className="block text-sm font-medium text-slate-700">{label}</label>
+        <input name={name} value={String(value || '')} onChange={onChange} type={type} required={required} className={`mt-1 input-field ${error ? 'invalid' : ''}`} />
+         {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+);
+
 
 const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }) => {
     const { user } = useContext(UserContext);
@@ -25,6 +43,12 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }, [formData]);
+    
+    useEffect(() => {
+        if (formData) {
+            validate();
+        }
+    }, [formData, validate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (formData) {
@@ -43,14 +67,6 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }
     
     if (!formData) return null;
 
-    const EditField: React.FC<{label: string, name: keyof Employee, value?: any, type?: string, required?: boolean}> = ({label, name, value, type="text", required=false}) => (
-        <div>
-            <label className="block text-sm font-medium text-slate-700">{label}</label>
-            <input name={name} value={String(value || '')} onChange={handleChange} type={type} required={required} className={`mt-1 input-field ${errors[name] ? 'invalid' : ''}`} />
-             {errors[name] && <p className="text-xs text-red-600 mt-1">{errors[name]}</p>}
-        </div>
-    );
-
     return (
         <div className="fixed inset-0 bg-slate-100 z-50 flex justify-center items-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
@@ -62,13 +78,13 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }
                     <div>
                         <h3 className="text-lg font-semibold text-slate-700 border-b pb-2 mb-4">Personal Information</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <EditField label="First Name" name="firstName" value={formData.firstName} required />
-                            <EditField label="Middle Name" name="middleName" value={formData.middleName} />
-                            <EditField label="Last Name" name="lastName" value={formData.lastName} required />
-                            <EditField label="Birthdate" name="birthdate" value={formData.birthdate} type="date" required />
-                            <EditField label="Mobile Number" name="mobileNumber" value={formData.mobileNumber} required />
+                            <EditField label="First Name" name="firstName" value={formData.firstName} required onChange={handleChange} error={errors.firstName} />
+                            <EditField label="Middle Name" name="middleName" value={formData.middleName} onChange={handleChange} error={errors.middleName} />
+                            <EditField label="Last Name" name="lastName" value={formData.lastName} required onChange={handleChange} error={errors.lastName} />
+                            <EditField label="Birthdate" name="birthdate" value={formData.birthdate} type="date" required onChange={handleChange} error={errors.birthdate} />
+                            <EditField label="Mobile Number" name="mobileNumber" value={formData.mobileNumber} required onChange={handleChange} error={errors.mobileNumber} />
                             <div className="md:col-span-2">
-                                <EditField label="Address" name="address" value={formData.address} required />
+                                <EditField label="Address" name="address" value={formData.address} required onChange={handleChange} error={errors.address} />
                             </div>
                         </div>
                     </div>
@@ -76,11 +92,11 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }
                     <div>
                          <h3 className="text-lg font-semibold text-slate-700 border-b pb-2 mb-4">Employment & Government IDs</h3>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <EditField label="Department" name="department" value={formData.department} required />
-                            <EditField label="TIN #" name="tinNumber" value={formData.tinNumber} />
-                            <EditField label="SSS #" name="sssNumber" value={formData.sssNumber} />
-                            <EditField label="Pag-ibig #" name="pagibigNumber" value={formData.pagibigNumber} />
-                            <EditField label="PhilHealth #" name="philhealthNumber" value={formData.philhealthNumber} />
+                            <EditField label="Department" name="department" value={formData.department} required onChange={handleChange} error={errors.department} />
+                            <EditField label="TIN #" name="tinNumber" value={formData.tinNumber} onChange={handleChange} error={errors.tinNumber} />
+                            <EditField label="SSS #" name="sssNumber" value={formData.sssNumber} onChange={handleChange} error={errors.sssNumber} />
+                            <EditField label="Pag-ibig #" name="pagibigNumber" value={formData.pagibigNumber} onChange={handleChange} error={errors.pagibigNumber} />
+                            <EditField label="PhilHealth #" name="philhealthNumber" value={formData.philhealthNumber} onChange={handleChange} error={errors.philhealthNumber} />
                          </div>
                     </div>
                     

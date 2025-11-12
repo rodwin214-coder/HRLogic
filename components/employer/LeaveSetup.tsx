@@ -56,7 +56,9 @@ const LeaveSetup: React.FC = () => {
     }, [policy]);
 
     useEffect(() => {
-        validate();
+        if (policy) {
+            validate();
+        }
     }, [policy, validate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

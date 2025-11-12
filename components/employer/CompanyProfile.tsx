@@ -56,8 +56,10 @@ const CompanyProfile: React.FC = () => {
     }, [formData]);
     
     useEffect(() => {
-        validate();
-    }, [formData, validate]);
+        if (isEditing) {
+            validate();
+        }
+    }, [formData, isEditing, validate]);
 
     useEffect(() => {
         const data = api.getCompanyProfile();

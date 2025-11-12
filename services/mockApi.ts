@@ -13,7 +13,7 @@ const EMAILJS_FORGOT_PASSWORD_TEMPLATE_ID = 'template_mh8a68e'; // For "Forgot P
 // The Public Key should be set in the init() call in index.html
 
 // --- Branding ---
-export const WORKLOGIX_LOGO_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiByeD0iNDgiIGZpbGw9IiMwRjJDNTIiLz4KPHRleHQgeD0iNTAlIiB5PSI1MCUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iSW50ZXIsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIwIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0id2hpdGUiPldMPC90ZXh0Pgo8L3N2Zz4K';
+export const WORKLOGIX_LOGO_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiByeD0iNDgiIGZpbGw9IiMwRjJDNTIiLz4KPHBhdGggZD0iTTcyIDE2OEwxMDIgMTAySDEzMEwxMDAgMTY4SDcyWiIgZmlsbD0idXJsKCNwYWludDBfbGluZWFyXzFfMikiLz4KPHBhdGggZD0iTTExOSAxNjVMMTM5IDEwNUwxNjcgMTY1SDExOVoiIGZpbGw9InVybCgjcGFpbnQxX2xpbmVhcl8xXzIpIi8+CjxwYXRoIGQ9Ik0xNzMgMTM4QzE2MyAxMjEgMTQzIDEwMyAxMjggOTNDMTEwIDk5IDEwMCAxMTUgODggMTM4TDEyOCA5M0wxNzMgMTM4WiIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC4xIi8+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9InBhaW50MF9saW5lYXJfMV8yIiB4MT0iMTAxIiB5MT0iMTAyIiB4Mj0iMTAxIiB5Mj0iMTY4IiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiMyMTk2RjMiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMEQ0N0ExIi8+CjwvbGluZWFyR3JhZGllbnQ+CjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQxX2xpbmVhcl8xXzIiIHgxPSIxNDMiIHkxPSIxMDUiIHgyPSIxNDMiIHkyPSIxNjUiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzRDQUY1MCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMxQjVFMjAiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K';
 
 // --- EmailJS Configuration ---
 // A helper function to send emails. It will silently fail if keys are not configured.
@@ -633,8 +633,18 @@ export const bulkDeleteEmployees = (employeeIds: string[]): void => {
 
 export const inviteEmployee = (details: { firstName: string, lastName: string, email: string, department: string }): { user: Employee, role: UserRole } | { error: string } => {
     const accounts = getUserAccounts();
-    if (accounts.some(acc => acc.email.toLowerCase() === details.email.toLowerCase())) {
-        return { error: 'An account with this email already exists.' };
+    const existingAccount = accounts.find(acc => acc.email.toLowerCase() === details.email.toLowerCase());
+
+    if (existingAccount) {
+        const associatedEmployee = getEmployeeById(existingAccount.employeeId);
+        if (associatedEmployee && associatedEmployee.status === EmployeeStatus.TERMINATED) {
+            // A terminated employee's email can be reused. This involves deleting the old terminated
+            // employee and all their associated data to make way for a new invitation.
+            deleteEmployee(associatedEmployee.id);
+        } else {
+            // Account exists and is for an active employee.
+            return { error: 'An account with this email already exists for an active employee.' };
+        }
     }
 
     const dateHired = new Date().toISOString().split('T')[0];
@@ -677,14 +687,16 @@ export const inviteEmployee = (details: { firstName: string, lastName: string, e
     const newEmployee = addEmployee(newEmployeeData);
     const defaultPassword = 'password123';
 
+    // Get the most recent list of accounts before adding a new one.
+    const currentAccounts = getUserAccounts();
     const newAccount: UserAccount = {
         email: details.email,
         password: defaultPassword, // Default password
         role: UserRole.EMPLOYEE,
         employeeId: newEmployee.id,
     };
-    accounts.push(newAccount);
-    saveUserAccounts(accounts);
+    currentAccounts.push(newAccount);
+    saveUserAccounts(currentAccounts);
     
     // Attempt to send email invitation
     sendInvitationEmail(
@@ -699,7 +711,7 @@ export const inviteEmployee = (details: { firstName: string, lastName: string, e
 export const bulkInviteEmployees = (emailsCsv: string, employmentType: EmploymentType): { successCount: number; errorCount: number; errors: string[] } => {
     const emails = emailsCsv.split(',').map(e => e.trim()).filter(e => e);
     const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
-    const accounts = getUserAccounts();
+    let accounts = getUserAccounts(); // Use let
     const defaultPassword = 'password123';
 
     emails.forEach(email => {
@@ -708,10 +720,21 @@ export const bulkInviteEmployees = (emailsCsv: string, employmentType: Employmen
             results.errors.push(`Invalid email format: ${email}`);
             return;
         }
-        if (accounts.some(acc => acc.email.toLowerCase() === email.toLowerCase())) {
-            results.errorCount++;
-            results.errors.push(`Email already exists: ${email}`);
-            return;
+
+        const existingAccount = accounts.find(acc => acc.email.toLowerCase() === email.toLowerCase());
+        if (existingAccount) {
+            const associatedEmployee = getEmployeeById(existingAccount.employeeId);
+            if (associatedEmployee && associatedEmployee.status === EmployeeStatus.TERMINATED) {
+                // Terminated employee email can be reused, delete old data first.
+                deleteEmployee(associatedEmployee.id);
+                // Refresh accounts list for next iteration
+                accounts = getUserAccounts();
+            } else {
+                // Active employee email cannot be reused.
+                results.errorCount++;
+                results.errors.push(`Email already exists for an active employee: ${email}`);
+                return;
+            }
         }
 
         const dateHired = new Date().toISOString().split('T')[0];
@@ -748,6 +771,7 @@ export const bulkInviteEmployees = (emailsCsv: string, employmentType: Employmen
             role: UserRole.EMPLOYEE,
             employeeId: newEmployee.id,
         };
+        // Use the potentially updated accounts list
         accounts.push(newAccount);
         saveUserAccounts(accounts);
         results.successCount++;
@@ -773,7 +797,7 @@ export const bulkImportEmployees = (csvData: string): { successCount: number, er
     }
     
     const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
-    const accounts = getUserAccounts();
+    let accounts = getUserAccounts(); // Use let
     const allShifts = getShifts();
     const defaultPassword = 'password123';
 
@@ -789,10 +813,21 @@ export const bulkImportEmployees = (csvData: string): { successCount: number, er
             results.errors.push(`Row ${i + 1}: Invalid email format.`);
             continue;
         }
-        if (accounts.some(acc => acc.email.toLowerCase() === entry.email.toLowerCase())) {
-            results.errorCount++;
-            results.errors.push(`Row ${i + 1}: Email already exists: ${entry.email}`);
-            continue;
+
+        const existingAccount = accounts.find(acc => acc.email.toLowerCase() === entry.email.toLowerCase());
+        if (existingAccount) {
+            const associatedEmployee = getEmployeeById(existingAccount.employeeId);
+            if (associatedEmployee && associatedEmployee.status === EmployeeStatus.TERMINATED) {
+                // Terminated employee email can be reused, delete old data first.
+                deleteEmployee(associatedEmployee.id);
+                // Refresh accounts list for next iteration
+                accounts = getUserAccounts();
+            } else {
+                // Active employee email cannot be reused.
+                results.errorCount++;
+                results.errors.push(`Row ${i + 1}: Email already exists for an active employee: ${entry.email}`);
+                continue;
+            }
         }
 
         const employees = getEmployees();

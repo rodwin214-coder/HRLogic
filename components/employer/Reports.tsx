@@ -220,15 +220,16 @@ export const Reports: React.FC = () => {
         switch(exportType) {
             case 'attendance':
                 fileName = `attendance_${startDate}_to_${endDate}.csv`;
-                csvContent += "Employee,Date,Clock In,Clock Out,Total Hours,Status\n";
+                csvContent += "Employee,Date,Clock In,Clock In Location,Clock Out,Total Hours,Status\n";
                 filteredAttendance.forEach(record => {
                     const employee = getEmployee(record.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
                     const clockIn = new Date(record.clockInTime).toLocaleTimeString();
+                    const location = record.clockInLocation ? `${record.clockInLocation.latitude}, ${record.clockInLocation.longitude}` : 'N/A';
                     const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A';
                     const { totalHours, status } = calculateStatus(record);
-                    csvContent += [empName, date, clockIn, clockOut, totalHours, status].map(escapeCSV).join(",") + "\n";
+                    csvContent += [empName, date, clockIn, location, clockOut, totalHours, status].map(escapeCSV).join(",") + "\n";
                 });
                 break;
             case 'requests':
@@ -256,7 +257,8 @@ export const Reports: React.FC = () => {
                     const employee = getEmployee(record.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
-                    const details = `Clock In: ${new Date(record.clockInTime).toLocaleTimeString()}, Clock Out: ${record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A'}`;
+                    const locationInfo = record.clockInLocation ? ` Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)})` : '';
+                    const details = `Clock In: ${new Date(record.clockInTime).toLocaleTimeString()}, Clock Out: ${record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A'}${locationInfo}`;
                     const { totalHours } = calculateStatus(record);
                     csvContent += ["Attendance", empName, date, details, totalHours].map(escapeCSV).join(",") + "\n";
                 });
@@ -377,6 +379,7 @@ export const Reports: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock In</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock Out</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Hours</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -393,6 +396,23 @@ export const Reports: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleDateString()}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleTimeString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {record.clockInLocation ? (
+                                            <a 
+                                                href={`https://www.google.com/maps?q=${record.clockInLocation.latitude},${record.clockInLocation.longitude}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-indigo-600 hover:text-indigo-900 hover:underline inline-flex items-center gap-1"
+                                                title={`Lat: ${record.clockInLocation.latitude}, Lon: ${record.clockInLocation.longitude}`}
+                                            >
+                                                View on Map
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                            </a>
+                                        ) : 'N/A'}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '---'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{totalHours}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -409,7 +429,7 @@ export const Reports: React.FC = () => {
                                 </tr>
                                )
                            }) : (
-                                <tr><td colSpan={8} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
+                                <tr><td colSpan={9} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
                            )}
                         </tbody>
                     </table>

@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/mockApi';
-import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, Task, TaskStatus, Employee } from '../../types';
+import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, Task, TaskStatus, Employee, CompanyProfile } from '../../types';
 import ClockInOut from './ClockInOut';
 import Modal from '../common/Modal';
 import HolidayCalendar from '../employer/HolidayCalendar';
@@ -289,12 +289,14 @@ const EmployeeDashboard: React.FC = () => {
     const [activeRightTab, setActiveRightTab] = useState<RightPaneTab>('profile');
     const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
     const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
+    const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
 
     const fetchData = useCallback(() => {
         if (user) {
             setRequests(api.getRequests().filter(r => r.employeeId === user.id).sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
             setTodaysRecord(api.getTodaysAttendance(user.id));
             setLeaveBalance(api.calculateLeaveBalance(user.id));
+            setCompanyProfile(api.getCompanyProfile());
         }
     }, [user]);
 
@@ -342,6 +344,13 @@ const EmployeeDashboard: React.FC = () => {
         <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
                  <div className="flex items-center gap-4">
+                     {companyProfile?.logo && (
+                        <img
+                            src={companyProfile.logo}
+                            alt={`${companyProfile.name} Logo`}
+                            className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md"
+                        />
+                     )}
                      <img
                         src={user.profilePicture || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random`}
                         alt="Profile"
@@ -349,7 +358,7 @@ const EmployeeDashboard: React.FC = () => {
                     />
                     <div>
                         <h1 className="text-3xl font-bold text-slate-800">Welcome, {user.firstName}!</h1>
-                        <p className="text-slate-500">Employee Dashboard</p>
+                        <p className="text-slate-500">{companyProfile?.name || 'WorkLogix'} - Employee Dashboard</p>
                     </div>
                 </div>
                 <button 
