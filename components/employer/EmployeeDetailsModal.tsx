@@ -46,6 +46,18 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
         onUpdate();
         setIsEditing(false);
     };
+
+    const handleResetPassword = () => {
+        if (window.confirm(`Are you sure you want to reset the password for ${employee.firstName} ${employee.lastName}? An email will be sent to them with a new temporary password.`)) {
+            if (!editor) return;
+            const result = api.resetEmployeePassword(employee.id, editor.id);
+            if (result.success) {
+                alert('Password has been reset successfully.');
+            } else {
+                alert(`Error: ${result.message}`);
+            }
+        }
+    }
     
     const ProfileField: React.FC<{label: string, value?: string | number | boolean}> = ({label, value}) => (
         <div>
@@ -188,6 +200,14 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                             </div>
                         </div>
                     )}
+                     {/* Security Actions */}
+                    <div className="pt-4">
+                        <h4 className="text-md font-semibold text-slate-600 border-b pb-1 mb-3">Security Actions</h4>
+                        <button onClick={handleResetPassword} className="btn btn-secondary text-sm border-red-300 text-red-700 hover:bg-red-50">
+                            Reset Employee Password
+                        </button>
+                        <p className="text-xs text-slate-500 mt-1">This will generate a new temporary password ('password123') and email it to the employee.</p>
+                    </div>
                 </div>
             )}
         </div>

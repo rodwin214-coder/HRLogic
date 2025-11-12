@@ -3,6 +3,7 @@ import { UserContext } from '../../App';
 import * as api from '../../services/mockApi';
 import { Employee, RequestType, LeaveBalance, CustomFieldDefinition } from '../../types';
 import Modal from '../common/Modal';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -59,6 +60,7 @@ const EmployeeProfile: React.FC = () => {
     const [isReasonModalOpen, setIsReasonModalOpen] = useState(false);
     const [pendingChanges, setPendingChanges] = useState<Partial<Employee> | null>(null);
     const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
+    const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
     const refreshEmployee = () => {
         if (user) {
@@ -296,6 +298,18 @@ const EmployeeProfile: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            <div>
+                <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                    <h3 className="text-xl font-semibold text-slate-700">Security</h3>
+                </div>
+                <button 
+                    onClick={() => setIsChangePasswordModalOpen(true)}
+                    className="btn btn-secondary"
+                >
+                    Change Password
+                </button>
+            </div>
             
              {isReasonModalOpen && (
                 <ReasonForChangeModal 
@@ -303,6 +317,12 @@ const EmployeeProfile: React.FC = () => {
                     onSubmit={handleSubmitChangeRequest}
                 />
              )}
+
+            {isChangePasswordModalOpen && (
+                <ChangePasswordModal 
+                    onClose={() => setIsChangePasswordModalOpen(false)}
+                />
+            )}
         </div>
     );
 };

@@ -1,13 +1,14 @@
 
+
 import { Employee, Shift, Holiday, AppRequest, AttendanceRecord, EmployeeStatus, RequestStatus, RequestType, CompanyProfile, UserAccount, UserRole, AuditLog, AuditLogChange, LeaveBalance, LeaveType, LeavePolicy, EmploymentType, Task, WorkSchedule, CustomFieldDefinition, LeaveRequest, OtUtRequest } from '../types';
 
 // --- EmailJS Configuration ---
 // IMPORTANT: Replace these placeholder values with your actual EmailJS credentials.
 // You can get these for free at https://www.emailjs.com/
-const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID'; // For employee invitations
-// FIX: Replaced hardcoded template ID with a placeholder to match other constants and resolve comparison error.
-const EMAILJS_PAYSLIP_TEMPLATE_ID = 'YOUR_PAYSLIP_TEMPLATE_ID'; // For payroll notifications
+const EMAILJS_SERVICE_ID = 'service_1qyjbpo';
+const EMAILJS_TEMPLATE_ID = 'template_s8hvdcv'; // For employee invitations
+const EMAILJS_PAYSLIP_TEMPLATE_ID = 'template_s8hvdcv'; // For payroll notifications
+const EMAILJS_PASSWORD_RESET_TEMPLATE_ID = 'template_mh8a68e'; // For password resets by employer
 // The Public Key should be set in the init() call in index.html
 
 // A helper function to send emails. It will silently fail if keys are not configured.
@@ -17,11 +18,12 @@ const sendInvitationEmail = (
     defaultPassword: string
 ) => {
     if (
-        EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID' ||
-        EMAILJS_TEMPLATE_ID === 'YOUR_TEMPLATE_ID'
+        // FIX: Cast to string to avoid TypeScript literal type comparison error. This preserves the check for placeholder values.
+        (EMAILJS_SERVICE_ID as string) === 'REPLACE_WITH_YOUR_EMAILJS_SERVICE_ID' ||
+        (EMAILJS_TEMPLATE_ID as string) === 'REPLACE_WITH_YOUR_INVITATION_TEMPLATE_ID'
     ) {
         console.warn(
-            'EmailJS is not configured for invitations. Skipping email invitation. Please set your credentials in services/mockApi.ts.'
+            'EmailJS is not configured for invitations. Skipping email invitation. Please set your credentials in services/mockApi.ts and index.html.'
         );
         return;
     }
@@ -42,6 +44,40 @@ const sendInvitationEmail = (
             },
             (error: any) => {
                 console.error('FAILED to send invitation email.', error);
+            }
+        );
+};
+
+const sendPasswordResetEmail = (
+    name: string,
+    email: string,
+    newPassword: string
+) => {
+    if (
+        (EMAILJS_SERVICE_ID as string) === 'service_1qyjbpo' &&
+        (EMAILJS_PASSWORD_RESET_TEMPLATE_ID as string) === 'REPLACE_WITH_YOUR_PASSWORD_RESET_TEMPLATE_ID'
+    ) {
+        console.warn(
+            'EmailJS is not configured for password resets. Skipping email notification. Please set your credentials in services/mockApi.ts.'
+        );
+        return;
+    }
+
+    const templateParams = {
+        to_name: name,
+        to_email: email,
+        new_password: newPassword,
+        from_name: getCompanyProfile()?.name || 'HR Core',
+    };
+
+    (window as any).emailjs
+        .send(EMAILJS_SERVICE_ID, EMAILJS_PASSWORD_RESET_TEMPLATE_ID, templateParams)
+        .then(
+            (response: any) => {
+                console.log('SUCCESS! Password reset email sent.', response.status, response.text);
+            },
+            (error: any) => {
+                console.error('FAILED to send password reset email.', error);
             }
         );
 };
@@ -245,6 +281,69 @@ export const loginUser = (email: string, password: string): { user: Employee, ro
     }
 
     return { user: userProfile, role: account.role };
+};
+
+export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
+    const accounts = getUserAccounts();
+    const accountIndex = accounts.findIndex(acc => acc.employeeId === employeeId);
+
+    if (accountIndex === -1) {
+        return { success: false, message: 'User account not found.' };
+    }
+
+    if (accounts[accountIndex].password !== currentPassword) {
+        return { success: false, message: 'Incorrect current password.' };
+    }
+    
+    if (newPassword.length < 8) {
+         return { success: false, message: 'New password must be at least 8 characters long.' };
+    }
+
+    accounts[accountIndex].password = newPassword;
+    saveUserAccounts(accounts);
+
+    return { success: true, message: 'Password changed successfully.' };
+};
+
+export const resetEmployeePassword = (employeeId: string, editorId: string): { success: boolean, message: string } => {
+    const accounts = getUserAccounts();
+    const accountIndex = accounts.findIndex(acc => acc.employeeId === employeeId);
+
+    if (accountIndex === -1) {
+        return { success: false, message: 'User account not found.' };
+    }
+    
+    const employee = getEmployeeById(employeeId);
+    if (!employee) {
+        return { success: false, message: 'Employee profile not found.' };
+    }
+
+    const defaultPassword = 'password123';
+    accounts[accountIndex].password = defaultPassword;
+    saveUserAccounts(accounts);
+    
+    // Create audit log
+    const logs = getAuditLogs();
+    const newLog: AuditLog = {
+        id: `log_${Date.now()}`,
+        employeeId: employeeId,
+        editorId,
+        timestamp: new Date().toISOString(),
+        changes: [
+            { field: 'Password Reset', oldValue: '********', newValue: `Reset to default by administrator.` }
+        ]
+    };
+    logs.push(newLog);
+    saveAuditLogs(logs);
+
+    // Send email notification
+    sendPasswordResetEmail(
+        `${employee.firstName} ${employee.lastName}`,
+        employee.email,
+        defaultPassword
+    );
+
+    return { success: true, message: 'Password has been reset successfully.' };
 };
 
 
@@ -964,8 +1063,9 @@ export const calculatePayrollSummary = (startDate: string, endDate: string) => {
 
 export const processPayrollAndNotify = async (payrollSummary: any[]): Promise<{successCount: number, errorCount: number}> => {
      if (
-        EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID' ||
-        EMAILJS_PAYSLIP_TEMPLATE_ID === 'YOUR_PAYSLIP_TEMPLATE_ID'
+        // FIX: Cast to string to avoid TypeScript literal type comparison error. This preserves the check for placeholder values.
+        (EMAILJS_SERVICE_ID as string) === 'REPLACE_WITH_YOUR_EMAILJS_SERVICE_ID' ||
+        (EMAILJS_PAYSLIP_TEMPLATE_ID as string) === 'REPLACE_WITH_YOUR_PAYSLIP_TEMPLATE_ID'
     ) {
         console.warn(
             'EmailJS is not configured for payroll. Skipping email notifications. Please set your credentials in services/mockApi.ts.'
