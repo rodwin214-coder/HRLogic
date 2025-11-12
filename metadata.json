@@ -1,6 +1,6 @@
 {
-  "name": "HR Magic - Attendance Tracker",
-  "description": "A simple clock-in and clock-out attendance capturing app with Employee and Employer views. Features include leave and overtime filing, request approvals, employee management, holiday calendars, and attendance reporting.",
+  "name": "WorkLogix",
+  "description": "A simple clock-in and clock-out attendance capturing app with Employee and Employer views under the WorkLogix brand. Features include leave and overtime filing, request approvals, employee management, holiday calendars, and attendance reporting.",
   "requestFramePermissions": [
     "camera",
     "geolocation"

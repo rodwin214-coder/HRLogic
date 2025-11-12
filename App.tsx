@@ -1,10 +1,12 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { UserRole, Employee } from './types';
 import * as api from './services/mockApi';
 import EmployeeDashboard from './components/employee/EmployeeDashboard';
 import EmployerDashboard from './components/employer/EmployerDashboard';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
+import { WORKLOGIX_LOGO_BASE64 } from './services/mockApi';
 
 interface UserContextType {
     user: Employee | null;
@@ -148,7 +150,10 @@ const App: React.FC = () => {
                 <div className="min-h-screen flex items-center justify-center p-4">
                     <div className="w-full max-w-md">
                         <div className="bg-white p-8 rounded-xl shadow-lg mb-4">
-                            <h1 className="text-3xl font-bold text-slate-800 mb-2 text-center">HR Core</h1>
+                            <div className="flex flex-col items-center justify-center mb-6">
+                                <img src={WORKLOGIX_LOGO_BASE64} alt="WorkLogix Logo" className="h-24 w-auto mb-2" />
+                            </div>
+                            
                             <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new Employer account' : 'Sign in to your account'}</p>
                             
                             <form onSubmit={(e) => { e.preventDefault(); isRegistering ? handleRegister() : handleLogin(); }} className="space-y-4">
@@ -174,7 +179,7 @@ const App: React.FC = () => {
                                 <div>
                                     <div className="flex justify-between items-center">
                                         <label htmlFor="password"className="block text-sm font-medium text-slate-700">Password</label>
-                                         <button type="button" onClick={() => setIsForgotPasswordOpen(true)} className="text-xs font-medium text-indigo-600 hover:text-indigo-500">
+                                         <button type="button" onClick={() => setIsForgotPasswordOpen(true)} className="text-xs font-medium text-[rgb(var(--color-primary))] hover:opacity-80">
                                             Forgot Password?
                                         </button>
                                     </div>
@@ -192,7 +197,7 @@ const App: React.FC = () => {
                             <div className="mt-6 text-sm text-slate-500 text-center">
                                 <p>
                                     {isRegistering ? 'Already have an account?' : "Don't have an account?"}
-                                    <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-indigo-600 hover:text-indigo-500 ml-1">
+                                    <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-[rgb(var(--color-primary))] hover:opacity-80 ml-1">
                                         {isRegistering ? 'Log In' : 'Sign Up'}
                                     </button>
                                 </p>

@@ -12,6 +12,10 @@ const EMAILJS_PASSWORD_RESET_TEMPLATE_ID = 'template_mh8a68e'; // For password r
 const EMAILJS_FORGOT_PASSWORD_TEMPLATE_ID = 'template_mh8a68e'; // For "Forgot Password" reminders, as requested.
 // The Public Key should be set in the init() call in index.html
 
+// --- Branding ---
+export const WORKLOGIX_LOGO_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiByeD0iNDgiIGZpbGw9IiMwRjJDNTIiLz4KPHRleHQgeD0iNTAlIiB5PSI1MCUiIGRvbWluYW50LWJhc2VsaW5lPSJjZW50cmFsIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iSW50ZXIsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIwIiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0id2hpdGUiPldMPC90ZXh0Pgo8L3N2Zz4K';
+
+// --- EmailJS Configuration ---
 // A helper function to send emails. It will silently fail if keys are not configured.
 const sendInvitationEmail = (
     name: string,
@@ -33,7 +37,7 @@ const sendInvitationEmail = (
         to_name: name,
         to_email: email,
         default_password: defaultPassword,
-        from_name: getCompanyProfile()?.name || 'HR Core',
+        from_name: getCompanyProfile()?.name || 'WorkLogix',
     };
 
     // Use the globally available emailjs object from the script in index.html
@@ -68,7 +72,7 @@ const sendPasswordResetEmail = (
         to_name: name,
         to_email: email,
         new_password: newPassword,
-        from_name: getCompanyProfile()?.name || 'HR Core',
+        from_name: getCompanyProfile()?.name || 'WorkLogix',
     };
 
     (window as any).emailjs
@@ -104,7 +108,7 @@ const sendForgotPasswordEmail = (
         // The template uses 'new_password', so we send the current password under that key.
         new_password: currentPassword, 
         user_password: currentPassword, // Also send as user_password for more flexible templates
-        from_name: getCompanyProfile()?.name || 'HR Core',
+        from_name: getCompanyProfile()?.name || 'WorkLogix',
     };
 
     return (window as any).emailjs
@@ -140,12 +144,12 @@ const initSeedData = () => {
     
     const companyProfile: CompanyProfile = {
         id: 'comp1',
-        name: 'HR Core Solutions',
+        name: 'WorkLogix',
         address: '123 Business Avenue, Tech City',
         contactNumber: '(02) 8888-8888',
-        email: 'contact@hrcore.com',
+        email: 'contact@worklogix.com',
         tin: '000-123-456-789',
-        logo: '',
+        logo: WORKLOGIX_LOGO_BASE64,
         workSchedule: WorkSchedule.MONDAY_TO_FRIDAY,
     };
     localStorage.setItem('companyProfile', JSON.stringify(companyProfile));
@@ -1165,7 +1169,7 @@ export const processPayrollAndNotify = async (payrollSummary: any[]): Promise<{s
     for (const summary of payrollSummary) {
          const templateParams = {
             ...summary,
-            company_name: companyProfile?.name || 'HR Core',
+            company_name: companyProfile?.name || 'WorkLogix',
         };
 
         try {
