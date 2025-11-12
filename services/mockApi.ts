@@ -119,13 +119,13 @@ export const getAuditLogsForEmployee = (employeeId: string): AuditLog[] => {
 export const getUserAccounts = (): UserAccount[] => getFromStorage<UserAccount>('userAccounts');
 const saveUserAccounts = (accounts: UserAccount[]): void => saveToStorage('userAccounts', accounts);
 
-export const registerUser = (firstName: string, lastName: string, email: string, password: string): { user: Employee, role: UserRole } | { error: string } => {
+export const registerEmployer = (firstName: string, lastName: string, email: string, password: string): { user: Employee, role: UserRole } | { error: string } => {
     const accounts = getUserAccounts();
     if (accounts.some(acc => acc.email.toLowerCase() === email.toLowerCase())) {
         return { error: 'An account with this email already exists.' };
     }
 
-    const role = accounts.length === 0 ? UserRole.EMPLOYER : UserRole.EMPLOYEE;
+    const role = UserRole.EMPLOYER;
     const dateHired = new Date().toISOString().split('T')[0];
     const companyProfile = getCompanyProfile();
     const employees = getEmployees();
@@ -140,14 +140,14 @@ export const registerUser = (firstName: string, lastName: string, email: string,
         address: '',
         birthdate: '',
         mobileNumber: '',
-        department: role === UserRole.EMPLOYER ? 'Management' : 'Unassigned',
+        department: 'Management',
         tinNumber: '',
         sssNumber: '',
         pagibigNumber: '',
         philhealthNumber: '',
         dateHired: dateHired,
         status: EmployeeStatus.ACTIVE,
-        employmentType: role === UserRole.EMPLOYER ? EmploymentType.FULL_TIME : EmploymentType.PROBATIONARY,
+        employmentType: EmploymentType.FULL_TIME,
         salaryHistory: [{
             id: `sal${Date.now()}`,
             effectiveDate: dateHired,

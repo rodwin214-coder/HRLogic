@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { UserRole, Employee } from './types';
 import * as api from './services/mockApi';
@@ -34,9 +31,14 @@ const App: React.FC = () => {
         const accounts = api.getUserAccounts();
         if (accounts.length === 0) {
             // Create default employer
-            api.registerUser('Admin', 'User', 'admin@work.com', 'password123');
+            api.registerEmployer('Admin', 'User', 'admin@work.com', 'password123');
             // Create default employee for testing
-            api.registerUser('John', 'Doe', 'employee@work.com', 'password123');
+            api.inviteEmployee({
+                firstName: 'John',
+                lastName: 'Doe',
+                email: 'employee@work.com',
+                department: 'Engineering',
+            });
         }
     }, []); // Runs once on mount
 
@@ -76,7 +78,7 @@ const App: React.FC = () => {
         setApiError('');
         if (!validate()) return;
 
-        const result = api.registerUser(firstName, lastName, email, password);
+        const result = api.registerEmployer(firstName, lastName, email, password);
         if ('error' in result) {
             setApiError(result.error);
         } else {
@@ -118,7 +120,7 @@ const App: React.FC = () => {
                 <div className="w-full max-w-md">
                     <div className="bg-white p-8 rounded-xl shadow-lg mb-4">
                         <h1 className="text-3xl font-bold text-slate-800 mb-2 text-center">HR Core</h1>
-                        <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create your new account' : 'Sign in to your account'}</p>
+                        <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new Employer account' : 'Sign in to your account'}</p>
                         
                         <form onSubmit={(e) => { e.preventDefault(); isRegistering ? handleRegister() : handleLogin(); }} className="space-y-4">
                             {isRegistering && (
@@ -149,7 +151,7 @@ const App: React.FC = () => {
                             {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
 
                             <button type="submit" disabled={!isFormValid} className="w-full btn btn-primary mt-2">
-                                {isRegistering ? 'Sign Up' : 'Login'}
+                                {isRegistering ? 'Create Employer Account' : 'Login'}
                             </button>
                         </form>
 
