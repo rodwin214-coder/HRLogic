@@ -9,6 +9,7 @@ const EMAILJS_SERVICE_ID = 'service_1qyjbpo';
 const EMAILJS_TEMPLATE_ID = 'template_s8hvdcv'; // For employee invitations
 const EMAILJS_PAYSLIP_TEMPLATE_ID = 'template_s8hvdcv'; // For payroll notifications
 const EMAILJS_PASSWORD_RESET_TEMPLATE_ID = 'template_mh8a68e'; // For password resets by employer
+const EMAILJS_FORGOT_PASSWORD_TEMPLATE_ID = 'template_mh8a68e'; // For "Forgot Password" reminders, as requested.
 // The Public Key should be set in the init() call in index.html
 
 // A helper function to send emails. It will silently fail if keys are not configured.
@@ -80,6 +81,34 @@ const sendPasswordResetEmail = (
                 console.error('FAILED to send password reset email.', error);
             }
         );
+};
+
+const sendForgotPasswordEmail = (
+    name: string,
+    email: string,
+    currentPassword: string
+) => {
+    if (
+        (EMAILJS_SERVICE_ID as string) === 'service_1qyjbpo' &&
+        (EMAILJS_FORGOT_PASSWORD_TEMPLATE_ID as string) === 'REPLACE_WITH_YOUR_PASSWORD_RESET_TEMPLATE_ID'
+    ) {
+        console.warn(
+            'EmailJS is not configured for password reminders. Skipping email notification. Please set your credentials in services/mockApi.ts.'
+        );
+        return Promise.reject('EmailJS not configured.');
+    }
+
+    const templateParams = {
+        to_name: name,
+        to_email: email,
+        // The template uses 'new_password', so we send the current password under that key.
+        new_password: currentPassword, 
+        user_password: currentPassword, // Also send as user_password for more flexible templates
+        from_name: getCompanyProfile()?.name || 'HR Core',
+    };
+
+    return (window as any).emailjs
+        .send(EMAILJS_SERVICE_ID, EMAILJS_FORGOT_PASSWORD_TEMPLATE_ID, templateParams);
 };
 
 
@@ -346,6 +375,33 @@ export const resetEmployeePassword = (employeeId: string, editorId: string): { s
     return { success: true, message: 'Password has been reset successfully.' };
 };
 
+export const requestPasswordReminder = async (email: string): Promise<{ success: boolean, message: string }> => {
+    const accounts = getUserAccounts();
+    const account = accounts.find(acc => acc.email.toLowerCase() === email.toLowerCase());
+
+    if (!account) {
+        // To prevent user enumeration, we return a success message even if the email doesn't exist.
+        return { success: true, message: "If an account with this email exists, a password reminder has been sent." };
+    }
+    
+    const employee = getEmployeeById(account.employeeId);
+    if (!employee) {
+        return { success: false, message: "Could not find an associated employee profile." };
+    }
+
+    try {
+        await sendForgotPasswordEmail(
+            `${employee.firstName} ${employee.lastName}`,
+            employee.email,
+            account.password // Send the current password
+        );
+         return { success: true, message: "If an account with this email exists, a password reminder has been sent." };
+    } catch (error) {
+        console.error("Forgot Password email failed:", error);
+        return { success: false, message: "Could not send reminder email. Please contact support." };
+    }
+};
+
 
 // Shifts
 export const getShifts = (): Shift[] => getFromStorage<Shift>('shifts');
@@ -541,6 +597,35 @@ export const addEmployee = (employeeData: Omit<Employee, 'id'>): Employee => {
     saveEmployees([...employees, newEmployee]);
     return newEmployee;
 };
+
+export const deleteEmployee = (employeeId: string): void => {
+    // This is a comprehensive deletion.
+    let employees = getEmployees();
+    let accounts = getUserAccounts();
+    let attendance = getAttendance();
+    let requests = getRequests();
+    let tasks = getTasks();
+    let logs = getAuditLogs();
+
+    employees = employees.filter(e => e.id !== employeeId);
+    accounts = accounts.filter(a => a.employeeId !== employeeId);
+    attendance = attendance.filter(a => a.employeeId !== employeeId);
+    requests = requests.filter(r => r.employeeId !== employeeId);
+    tasks = tasks.filter(t => t.employeeId !== employeeId);
+    logs = logs.filter(l => l.employeeId !== employeeId);
+
+    saveEmployees(employees);
+    saveUserAccounts(accounts);
+    saveAttendance(attendance);
+    saveToStorage('requests', requests);
+    saveToStorage('tasks', tasks);
+    saveAuditLogs(logs);
+};
+
+export const bulkDeleteEmployees = (employeeIds: string[]): void => {
+    employeeIds.forEach(id => deleteEmployee(id));
+};
+
 
 export const inviteEmployee = (details: { firstName: string, lastName: string, email: string, department: string }): { user: Employee, role: UserRole } | { error: string } => {
     const accounts = getUserAccounts();

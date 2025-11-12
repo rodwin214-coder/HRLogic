@@ -4,6 +4,7 @@ import { UserRole, Employee } from './types';
 import * as api from './services/mockApi';
 import EmployeeDashboard from './components/employee/EmployeeDashboard';
 import EmployerDashboard from './components/employer/EmployerDashboard';
+import ForgotPasswordModal from './components/common/ForgotPasswordModal';
 
 interface UserContextType {
     user: Employee | null;
@@ -17,6 +18,7 @@ export const UserContext = React.createContext<UserContextType>({ user: null, ro
 const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<{ user: Employee | null; role: UserRole | null }>({ user: null, role: null });
     const [isRegistering, setIsRegistering] = useState(false);
+    const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
     
     // Form state
     const [firstName, setFirstName] = useState('');
@@ -116,56 +118,64 @@ const App: React.FC = () => {
 
     if (!currentUser.user) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <div className="bg-white p-8 rounded-xl shadow-lg mb-4">
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2 text-center">HR Core</h1>
-                        <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new Employer account' : 'Sign in to your account'}</p>
-                        
-                        <form onSubmit={(e) => { e.preventDefault(); isRegistering ? handleRegister() : handleLogin(); }} className="space-y-4">
-                            {isRegistering && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label>
-                                        <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={`mt-1 input-field ${errors.firstName ? 'invalid' : ''}`}/>
-                                        {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
-                                    </div>
-                                    <div>
-                                        <label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label>
-                                        <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className={`mt-1 input-field ${errors.lastName ? 'invalid' : ''}`}/>
-                                        {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
-                                    </div>
-                                </div>
-                            )}
-                            <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email Address</label>
-                                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={`mt-1 input-field ${errors.email ? 'invalid' : ''}`}/>
-                                {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
-                            </div>
-                            <div>
-                                <label htmlFor="password"className="block text-sm font-medium text-slate-700">Password</label>
-                                <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className={`mt-1 input-field ${errors.password ? 'invalid' : ''}`}/>
-                                {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
-                            </div>
+            <>
+                {isForgotPasswordOpen && <ForgotPasswordModal onClose={() => setIsForgotPasswordOpen(false)} />}
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="w-full max-w-md">
+                        <div className="bg-white p-8 rounded-xl shadow-lg mb-4">
+                            <h1 className="text-3xl font-bold text-slate-800 mb-2 text-center">HR Core</h1>
+                            <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new Employer account' : 'Sign in to your account'}</p>
                             
-                            {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
+                            <form onSubmit={(e) => { e.preventDefault(); isRegistering ? handleRegister() : handleLogin(); }} className="space-y-4">
+                                {isRegistering && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label>
+                                            <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={`mt-1 input-field ${errors.firstName ? 'invalid' : ''}`}/>
+                                            {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
+                                        </div>
+                                        <div>
+                                            <label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label>
+                                            <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className={`mt-1 input-field ${errors.lastName ? 'invalid' : ''}`}/>
+                                            {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
+                                        </div>
+                                    </div>
+                                )}
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email Address</label>
+                                    <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className={`mt-1 input-field ${errors.email ? 'invalid' : ''}`}/>
+                                    {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center">
+                                        <label htmlFor="password"className="block text-sm font-medium text-slate-700">Password</label>
+                                         <button type="button" onClick={() => setIsForgotPasswordOpen(true)} className="text-xs font-medium text-indigo-600 hover:text-indigo-500">
+                                            Forgot Password?
+                                        </button>
+                                    </div>
+                                    <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className={`mt-1 input-field ${errors.password ? 'invalid' : ''}`}/>
+                                    {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
+                                </div>
+                                
+                                {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
 
-                            <button type="submit" disabled={!isFormValid} className="w-full btn btn-primary mt-2">
-                                {isRegistering ? 'Create Employer Account' : 'Login'}
-                            </button>
-                        </form>
-
-                        <div className="mt-6 text-sm text-slate-500 text-center">
-                            <p>
-                                {isRegistering ? 'Already have an account?' : "Don't have an account?"}
-                                <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-indigo-600 hover:text-indigo-500 ml-1">
-                                    {isRegistering ? 'Log In' : 'Sign Up'}
+                                <button type="submit" disabled={!isFormValid} className="w-full btn btn-primary mt-2">
+                                    {isRegistering ? 'Create Employer Account' : 'Login'}
                                 </button>
-                            </p>
+                            </form>
+
+                            <div className="mt-6 text-sm text-slate-500 text-center">
+                                <p>
+                                    {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+                                    <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-indigo-600 hover:text-indigo-500 ml-1">
+                                        {isRegistering ? 'Log In' : 'Sign Up'}
+                                    </button>
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </>
         );
     }
 

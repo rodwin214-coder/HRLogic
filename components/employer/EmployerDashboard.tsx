@@ -29,20 +29,6 @@ const EmployerDashboard: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData, activeTab]); // Re-fetch on tab change to keep count fresh
-
-    const renderTabContent = () => {
-        switch (activeTab) {
-            case 'notifications': return <RequestManagement />;
-            case 'employees': return <EmployeeManagement />;
-            case 'reports': return <Reports />;
-            case 'company': return <CompanyProfile />;
-            case 'shifts': return <ShiftManagement />;
-            case 'leavePolicy': return <LeaveSetup />;
-            case 'calendar': return <HolidayCalendar canAddHoliday={true} />;
-            case 'customFields': return <CustomFieldsSetup />;
-            default: return null;
-        }
-    };
     
     const TabButton: React.FC<{tabId: Tab; children: React.ReactNode}> = ({ tabId, children }) => {
         const isActive = activeTab === tabId;
@@ -107,7 +93,14 @@ const EmployerDashboard: React.FC = () => {
             </div>
 
             <main>
-                {renderTabContent()}
+                <div className={activeTab === 'notifications' ? '' : 'hidden'}><RequestManagement /></div>
+                <div className={activeTab === 'employees' ? '' : 'hidden'}><EmployeeManagement /></div>
+                <div className={activeTab === 'reports' ? '' : 'hidden'}><Reports /></div>
+                <div className={activeTab === 'company' ? '' : 'hidden'}><CompanyProfile /></div>
+                <div className={activeTab === 'shifts' ? '' : 'hidden'}><ShiftManagement /></div>
+                <div className={activeTab === 'leavePolicy' ? '' : 'hidden'}><LeaveSetup /></div>
+                <div className={activeTab === 'customFields' ? '' : 'hidden'}><CustomFieldsSetup /></div>
+                <div className={activeTab === 'calendar' ? '' : 'hidden'}><HolidayCalendar canAddHoliday={true} /></div>
             </main>
         </div>
     );
