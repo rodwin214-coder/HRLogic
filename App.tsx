@@ -19,6 +19,7 @@ const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<{ user: Employee | null; role: UserRole | null }>({ user: null, role: null });
     const [isRegistering, setIsRegistering] = useState(false);
     const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     
     // Form state
     const [firstName, setFirstName] = useState('');
@@ -43,6 +44,23 @@ const App: React.FC = () => {
             });
         }
     }, []); // Runs once on mount
+
+    // Check for a logged-in user in localStorage on initial load
+    useEffect(() => {
+        const loggedInUserId = localStorage.getItem('loggedInUserId');
+        if (loggedInUserId) {
+            const accounts = api.getUserAccounts();
+            const userAccount = accounts.find(acc => acc.employeeId === loggedInUserId);
+            if (userAccount) {
+                const userProfile = api.getEmployeeById(userAccount.employeeId);
+                if (userProfile) {
+                    setCurrentUser({ user: userProfile, role: userAccount.role });
+                }
+            }
+        }
+        setIsLoading(false);
+    }, []);
+
 
     const validate = useCallback(() => {
         const newErrors: { [key: string]: string } = {};
@@ -73,6 +91,7 @@ const App: React.FC = () => {
             setApiError(result.error);
         } else {
             setCurrentUser({ user: result.user, role: result.role });
+            localStorage.setItem('loggedInUserId', result.user.id);
         }
     }, [email, password, validate]);
 
@@ -86,11 +105,13 @@ const App: React.FC = () => {
         } else {
             // Auto-login after registration
             setCurrentUser({ user: result.user, role: result.role });
+            localStorage.setItem('loggedInUserId', result.user.id);
         }
     }, [firstName, lastName, email, password, validate]);
     
     const handleLogout = useCallback(() => {
         setCurrentUser({ user: null, role: null });
+        localStorage.removeItem('loggedInUserId');
         // Clear form fields on logout
         setEmail('');
         setPassword('');
@@ -115,6 +136,10 @@ const App: React.FC = () => {
     const userContextValue = useMemo(() => ({ ...currentUser, logout: handleLogout, refreshUser }), [currentUser, handleLogout, refreshUser]);
     
     const isFormValid = Object.keys(errors).length === 0;
+
+    if (isLoading) {
+        return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
+    }
 
     if (!currentUser.user) {
         return (

@@ -13,6 +13,30 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
+// FIX: Moved helper components to the top level to prevent re-creation on re-renders, fixing the input bug.
+const ProfileField: React.FC<{label: string, value?: string}> = ({label, value}) => (
+    <div>
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+        <p className="text-md text-slate-800">{value || 'N/A'}</p>
+    </div>
+);
+
+const EditField: React.FC<{
+    label: string, 
+    name: keyof Omit<CompanyProfileType, 'id' | 'workSchedule' | 'logo'>, 
+    value: string | undefined,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
+    required?: boolean, 
+    error?: string 
+}> = ({ label, name, value, onChange, required = false, error }) => (
+     <div>
+        <label className="block text-sm font-medium text-slate-700">{label}</label>
+        <input name={name} value={value} onChange={onChange} required={required} className={`mt-1 input-field ${error ? 'invalid' : ''}`} />
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+);
+
+
 const CompanyProfile: React.FC = () => {
     const [profile, setProfile] = useState<CompanyProfileType | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -88,21 +112,6 @@ const CompanyProfile: React.FC = () => {
     if (!profile || !formData) {
         return <div>Loading company profile...</div>;
     }
-    
-    const ProfileField: React.FC<{label: string, value?: string}> = ({label, value}) => (
-        <div>
-            <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className="text-md text-slate-800">{value || 'N/A'}</p>
-        </div>
-    );
-    
-    const EditField: React.FC<{label: string, name: keyof Omit<CompanyProfileType, 'id' | 'workSchedule' | 'logo'>, value?: string, required?: boolean, error?: string }> = ({ label, name, value, required = false, error }) => (
-         <div>
-            <label className="block text-sm font-medium text-slate-700">{label}</label>
-            <input name={name} value={value} onChange={handleChange} required={required} className={`mt-1 input-field ${error ? 'invalid' : ''}`} />
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
-        </div>
-    );
 
     return (
         <div className="card">
@@ -145,12 +154,12 @@ const CompanyProfile: React.FC = () => {
                             />
                         </div>
                         <div className="flex-grow w-full">
-                             <EditField label="Company Name" name="name" value={formData.name} required error={errors.name} />
+                             <EditField label="Company Name" name="name" value={formData.name} onChange={handleChange} required error={errors.name} />
                         </div>
                     </div>
                     {/* Other details */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <EditField label="Company TIN" name="tin" value={formData.tin} />
+                        <EditField label="Company TIN" name="tin" value={formData.tin} onChange={handleChange} />
                         <div>
                             <label className="block text-sm font-medium text-slate-700">Work Schedule</label>
                             <select
@@ -165,10 +174,10 @@ const CompanyProfile: React.FC = () => {
                             </select>
                         </div>
                          <div className="md:col-span-2">
-                             <EditField label="Company Address" name="address" value={formData.address} />
+                             <EditField label="Company Address" name="address" value={formData.address} onChange={handleChange} />
                          </div>
-                         <EditField label="Contact Number" name="contactNumber" value={formData.contactNumber} />
-                         <EditField label="Contact Email" name="email" value={formData.email} error={errors.email} />
+                         <EditField label="Contact Number" name="contactNumber" value={formData.contactNumber} onChange={handleChange} />
+                         <EditField label="Contact Email" name="email" value={formData.email} onChange={handleChange} error={errors.email} />
                     </div>
                     
                     {/* Action buttons */}

@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/mockApi';
@@ -49,6 +50,28 @@ const ReasonForChangeModal: React.FC<{
         </Modal>
     )
 }
+
+// FIX: Moved helper components to the top level to prevent re-creation on re-renders, fixing the input bug.
+const ProfileField: React.FC<{label: string, value?: string}> = ({label, value}) => (
+    <div>
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+        <p className="text-md text-slate-800">{value || 'N/A'}</p>
+    </div>
+);
+
+const EditField: React.FC<{
+    label: string; 
+    name: keyof Employee; 
+    value: string | number | undefined;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    type?: string;
+}> = ({label, name, value, onChange, type="text"}) => (
+    <div>
+        <label className="block text-sm font-medium text-slate-700">{label}</label>
+        <input name={name} value={String(value || '')} onChange={onChange} type={type} className="mt-1 input-field" />
+    </div>
+);
+
 
 const EmployeeProfile: React.FC = () => {
     const { user } = useContext(UserContext);
@@ -148,20 +171,6 @@ const EmployeeProfile: React.FC = () => {
 
     if (!employee || !formData) return <div>Loading profile...</div>;
 
-    const ProfileField: React.FC<{label: string, value?: string}> = ({label, value}) => (
-        <div>
-            <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className="text-md text-slate-800">{value || 'N/A'}</p>
-        </div>
-    );
-    
-    const EditField: React.FC<{label: string, name: keyof Employee, type?: string}> = ({label, name, type="text"}) => (
-        <div>
-            <label className="block text-sm font-medium text-slate-700">{label}</label>
-            <input name={name} value={String(formData[name] || '')} onChange={handleChange} type={type} className="mt-1 input-field" />
-        </div>
-    );
-
     return (
         <div className="card space-y-8">
             <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -212,20 +221,20 @@ const EmployeeProfile: React.FC = () => {
                     {isEditing ? (
                         <>
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <EditField label="First Name" name="firstName" />
-                            <EditField label="Middle Name" name="middleName" />
-                            <EditField label="Last Name" name="lastName" />
-                            <EditField label="Birthdate" name="birthdate" type="date" />
-                            <EditField label="Mobile Number" name="mobileNumber" />
+                            <EditField label="First Name" name="firstName" value={formData.firstName} onChange={handleChange}/>
+                            <EditField label="Middle Name" name="middleName" value={formData.middleName} onChange={handleChange} />
+                            <EditField label="Last Name" name="lastName" value={formData.lastName} onChange={handleChange} />
+                            <EditField label="Birthdate" name="birthdate" value={formData.birthdate} onChange={handleChange} type="date" />
+                            <EditField label="Mobile Number" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} />
                          </div>
                          <div className="pt-2">
-                             <EditField label="Address" name="address" />
+                             <EditField label="Address" name="address" value={formData.address} onChange={handleChange} />
                          </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                             <EditField label="TIN #" name="tinNumber" />
-                             <EditField label="SSS #" name="sssNumber" />
-                             <EditField label="Pag-ibig #" name="pagibigNumber" />
-                             <EditField label="PhilHealth #" name="philhealthNumber" />
+                             <EditField label="TIN #" name="tinNumber" value={formData.tinNumber} onChange={handleChange} />
+                             <EditField label="SSS #" name="sssNumber" value={formData.sssNumber} onChange={handleChange} />
+                             <EditField label="Pag-ibig #" name="pagibigNumber" value={formData.pagibigNumber} onChange={handleChange} />
+                             <EditField label="PhilHealth #" name="philhealthNumber" value={formData.philhealthNumber} onChange={handleChange} />
                          </div>
                         </>
                     ) : (

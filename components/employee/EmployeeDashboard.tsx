@@ -414,15 +414,15 @@ const EmployeeDashboard: React.FC = () => {
                         </nav>
                     </div>
                     
-                    {activeRightTab === 'profile' && (
+                    <div className={activeRightTab === 'profile' ? '' : 'hidden'}>
                         <EmployeeProfile />
-                    )}
+                    </div>
 
-                    {activeRightTab === 'tasks' && (
+                    <div className={activeRightTab === 'tasks' ? '' : 'hidden'}>
                         <MyTasks />
-                    )}
+                    </div>
 
-                    {activeRightTab === 'requests' && (
+                    <div className={activeRightTab === 'requests' ? '' : 'hidden'}>
                         <div className="card">
                             <h2 className="text-xl font-bold text-slate-800 mb-4">My Requests</h2>
                             <div className="overflow-x-auto">
@@ -454,15 +454,15 @@ const EmployeeDashboard: React.FC = () => {
                                 </table>
                             </div>
                         </div>
-                    )}
+                    </div>
                     
-                    {activeRightTab === 'calendar' && (
+                    <div className={activeRightTab === 'calendar' ? '' : 'hidden'}>
                         <HolidayCalendar />
-                    )}
+                    </div>
 
-                    {activeRightTab === 'reports' && (
+                    <div className={activeRightTab === 'reports' ? '' : 'hidden'}>
                         <EmployeeReport />
-                    )}
+                    </div>
                 </div>
             </div>
              <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`File ${modalType}`}>
