@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import * as api from '../../services/mockApi';
 import { AttendanceRecord, Employee, Shift, AppRequest, Holiday, RequestType, RequestStatus, CompanyProfile, WorkSchedule } from '../../types';
@@ -12,8 +13,19 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     return <span className={`status-badge ${statusClasses[status]}`}>{status}</span>;
 }
 
+// Define a type for the payroll summary items
+type PayrollSummaryItem = {
+    employeeId: string;
+    employeeName: string;
+    employeeEmail: string;
+    totalHours: string;
+    otHours: string;
+    leaveDays: number;
+    grossPay: string;
+};
 
-const Reports: React.FC = () => {
+
+export const Reports: React.FC = () => {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [shifts, setShifts] = useState<Shift[]>([]);
@@ -24,6 +36,12 @@ const Reports: React.FC = () => {
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [recordToEdit, setRecordToEdit] = useState<AttendanceRecord | undefined>(undefined);
     
+    // Payroll state
+    const [payrollSummary, setPayrollSummary] = useState<PayrollSummaryItem[]>([]);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [processMessage, setProcessMessage] = useState('');
+
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
     const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -62,6 +80,33 @@ const Reports: React.FC = () => {
         setRecordToEdit(undefined);
         fetchData();
     };
+
+    const handleGeneratePayroll = () => {
+        setIsGenerating(true);
+        setProcessMessage('');
+        // Simulate a short delay for calculation
+        setTimeout(() => {
+            const summary = api.calculatePayrollSummary(startDate, endDate);
+            setPayrollSummary(summary);
+            setIsGenerating(false);
+        }, 500);
+    };
+
+    const handleProcessPayroll = async () => {
+        if (payrollSummary.length === 0) return;
+        
+        setIsProcessing(true);
+        setProcessMessage('');
+        const result = await api.processPayrollAndNotify(payrollSummary);
+        setIsProcessing(false);
+        
+        if(result.successCount > 0) {
+            setProcessMessage(`${result.successCount} of ${payrollSummary.length} payslip notifications sent successfully.`);
+        } else {
+             setProcessMessage(`Failed to send notifications. Please check your EmailJS configuration.`);
+        }
+    };
+
 
     const filteredAttendance = useMemo(() => {
         return attendance.filter(record => {
@@ -240,18 +285,74 @@ const Reports: React.FC = () => {
 
     return (
         <div className="card space-y-8">
+             {/* Payroll Section */}
+            <div className="p-4 border-2 border-dashed rounded-lg bg-slate-50">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Payroll Processing</h2>
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 bg-slate-100 p-3 rounded-md">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium">Period:</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="input-field"/>
+                        <span>to</span>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="input-field"/>
+                    </div>
+                    <button onClick={handleGeneratePayroll} disabled={isGenerating} className="btn btn-secondary w-full md:w-auto">
+                        {isGenerating ? 'Generating...' : 'Generate Summary'}
+                    </button>
+                </div>
+
+                {payrollSummary.length > 0 && (
+                    <div className="animate-fade-in">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead className="bg-slate-100">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left font-medium text-gray-600">Employee</th>
+                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Total Hours</th>
+                                        <th className="px-4 py-2 text-right font-medium text-gray-600">OT Hours</th>
+                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Leave Days</th>
+                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Gross Pay (Est.)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {payrollSummary.map(item => (
+                                        <tr key={item.employeeId}>
+                                            <td className="px-4 py-2 whitespace-nowrap font-medium text-gray-800">{item.employeeName}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.totalHours}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.otHours}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.leaveDays}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-right font-semibold">
+                                                {parseFloat(item.grossPay) > 0 ? `$${parseFloat(item.grossPay).toLocaleString()}` : 'N/A'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="mt-4 text-xs text-slate-500">
+                            <strong>Note:</strong> Gross Pay is an estimate based on the latest monthly salary record, assuming a 40-hour work week. Overtime is calculated at 1.5x the hourly rate. This does not include taxes or other deductions.
+                        </div>
+                        <div className="mt-4 flex flex-col md:flex-row justify-end items-center gap-4">
+                            {processMessage && <p className="text-sm font-semibold text-green-700">{processMessage}</p>}
+                            <button onClick={handleProcessPayroll} disabled={isProcessing} className="btn btn-primary bg-green-600 hover:bg-green-700 w-full md:w-auto">
+                                {isProcessing ? 'Processing...' : 'Process Payroll & Notify Employees'}
+                            </button>
+                        </div>
+                         <div className="mt-2 text-xs text-slate-500 text-right">
+                            Requires a configured EmailJS template for payslips.
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-slate-800">Comprehensive Report</h2>
+                <h2 className="text-xl font-bold text-slate-800">Historical Data & Reports</h2>
                  <div className="flex items-center gap-2">
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="input-field"/>
-                    <span>to</span>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="input-field"/>
-                    <button onClick={handleOpenAddModal} className="btn btn-primary">
+                    <button onClick={handleOpenAddModal} className="btn btn-secondary">
                         + Manual Entry
                     </button>
                     <div className="relative ml-2">
-                        <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="bg-green-600 text-white hover:bg-green-700 text-sm btn">
-                            Export
+                        <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="bg-blue-600 text-white hover:bg-blue-700 text-sm btn">
+                            Export Data
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </button>
                         {isExportMenuOpen && (
@@ -311,14 +412,43 @@ const Reports: React.FC = () => {
                                 <tr><td colSpan={8} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
                            )}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
             
+            {/* Absences Log */}
+             <div>
+                <h3 className="text-lg font-semibold text-slate-700 mb-3">Absences</h3>
+                 <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date of Absence</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                           {filteredAbsences.length > 0 ? filteredAbsences.map(({employee, date}) => (
+                                <tr key={`${employee.id}-${date}`}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{employee.firstName} {employee.lastName}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">{new Date(date + 'T00:00:00').toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">No attendance or approved leave.</td>
+                                </tr>
+                           )) : (
+                                <tr>
+                                    <td colSpan={3} className="text-center py-4 text-sm text-gray-500">No unexplained absences in this period.</td>
+                                </tr>
+                           )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Requests Log */}
             <div>
-                <h3 className="text-lg font-semibold text-slate-700 mb-3">Leave & Other Requests</h3>
-                <div className="overflow-x-auto">
+                <h3 className="text-lg font-semibold text-slate-700 mb-3">Requests Log</h3>
+                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
@@ -334,7 +464,7 @@ const Reports: React.FC = () => {
                                 const employee = getEmployee(req.employeeId);
                                 return (
                                 <tr key={req.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{req.type}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {req.type === RequestType.LEAVE ? `${req.leaveType}: ${req.startDate} to ${req.endDate}` : req.type === RequestType.CHANGE_REQUEST ? `Update Info` : `${req.hours} hrs on ${req.date}`}
@@ -351,35 +481,9 @@ const Reports: React.FC = () => {
                     </table>
                 </div>
             </div>
-
-            {/* Absences Log */}
-            <div>
-                <h3 className="text-lg font-semibold text-slate-700 mb-3">Unexplained Absences</h3>
-                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date of Absence</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                           {filteredAbsences.length > 0 ? filteredAbsences.map(({employee, date}, index) => (
-                                <tr key={`${employee.id}-${date}-${index}`}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">{`${employee.firstName} ${employee.lastName}`}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(date + 'T00:00:00').toLocaleDateString()}</td>
-                                </tr>
-                           )) : (
-                                <tr>
-                                    <td colSpan={2} className="text-center py-4 text-sm text-gray-500">No unexplained absences in this period.</td>
-                                </tr>
-                           )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            
             {isManualModalOpen && (
-                <ManualAttendanceModal
+                <ManualAttendanceModal 
                     onClose={() => setIsManualModalOpen(false)}
                     onSuccess={handleModalSuccess}
                     recordToEdit={recordToEdit}
@@ -388,5 +492,3 @@ const Reports: React.FC = () => {
         </div>
     );
 };
-
-export default Reports;

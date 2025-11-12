@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
@@ -17,6 +17,17 @@
     "react": "https://aistudiocdn.com/react@^19.2.0"
   }
 }
+</script>
+<script type="text/javascript"
+        src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js">
+</script>
+<script type="text/javascript">
+   (function(){
+      // IMPORTANT: Replace with your actual Public Key from your EmailJS account.
+      emailjs.init({
+        publicKey: "YOUR_PUBLIC_KEY",
+      });
+   })();
 </script>
 <style>
   :root {

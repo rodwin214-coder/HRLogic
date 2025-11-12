@@ -1,7 +1,8 @@
+
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import RequestManagement from './RequestManagement';
 import EmployeeManagement from './EmployeeManagement';
-import Reports from './Reports';
+import { Reports } from './Reports';
 import HolidayCalendar from './HolidayCalendar';
 import ShiftManagement from './ShiftManagement';
 import CompanyProfile from './CompanyProfile';

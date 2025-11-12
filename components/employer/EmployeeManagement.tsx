@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import * as api from '../../services/mockApi';
 import { Employee, EmployeeStatus, WorkSchedule } from '../../types';
@@ -64,6 +65,9 @@ const BulkImportModal: React.FC<{onClose: () => void, onImport: () => void}> = (
                         )}
                     </div>
                 )}
+                 <div className="text-xs text-slate-500 bg-slate-100 p-2 rounded-md">
+                    <strong>Note:</strong> Imported employees will be sent an invitation email with a default password. This requires EmailJS to be configured in <code>services/mockApi.ts</code> and <code>index.html</code>.
+                </div>
                 <div className="flex justify-end gap-2 pt-4 border-t">
                     <button type="button" onClick={onClose} className="btn btn-secondary">Close</button>
                     <button type="button" onClick={handleImport} disabled={!csvFile || isImporting} className="btn btn-primary">

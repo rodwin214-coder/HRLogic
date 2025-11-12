@@ -1,5 +1,51 @@
 
-import { Employee, Shift, Holiday, AppRequest, AttendanceRecord, EmployeeStatus, RequestStatus, RequestType, CompanyProfile, UserAccount, UserRole, AuditLog, AuditLogChange, LeaveBalance, LeaveType, LeavePolicy, EmploymentType, Task, WorkSchedule, CustomFieldDefinition, LeaveRequest } from '../types';
+import { Employee, Shift, Holiday, AppRequest, AttendanceRecord, EmployeeStatus, RequestStatus, RequestType, CompanyProfile, UserAccount, UserRole, AuditLog, AuditLogChange, LeaveBalance, LeaveType, LeavePolicy, EmploymentType, Task, WorkSchedule, CustomFieldDefinition, LeaveRequest, OtUtRequest } from '../types';
+
+// --- EmailJS Configuration ---
+// IMPORTANT: Replace these placeholder values with your actual EmailJS credentials.
+// You can get these for free at https://www.emailjs.com/
+const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID'; // For employee invitations
+// FIX: Replaced hardcoded template ID with a placeholder to match other constants and resolve comparison error.
+const EMAILJS_PAYSLIP_TEMPLATE_ID = 'YOUR_PAYSLIP_TEMPLATE_ID'; // For payroll notifications
+// The Public Key should be set in the init() call in index.html
+
+// A helper function to send emails. It will silently fail if keys are not configured.
+const sendInvitationEmail = (
+    name: string,
+    email: string,
+    defaultPassword: string
+) => {
+    if (
+        EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID' ||
+        EMAILJS_TEMPLATE_ID === 'YOUR_TEMPLATE_ID'
+    ) {
+        console.warn(
+            'EmailJS is not configured for invitations. Skipping email invitation. Please set your credentials in services/mockApi.ts.'
+        );
+        return;
+    }
+
+    const templateParams = {
+        to_name: name,
+        to_email: email,
+        default_password: defaultPassword,
+        from_name: getCompanyProfile()?.name || 'HR Core',
+    };
+
+    // Use the globally available emailjs object from the script in index.html
+    (window as any).emailjs
+        .send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+        .then(
+            (response: any) => {
+                console.log('SUCCESS! Invitation email sent.', response.status, response.text);
+            },
+            (error: any) => {
+                console.error('FAILED to send invitation email.', error);
+            }
+        );
+};
+
 
 let migrationDone = false;
 
@@ -151,7 +197,7 @@ export const registerEmployer = (firstName: string, lastName: string, email: str
         salaryHistory: [{
             id: `sal${Date.now()}`,
             effectiveDate: dateHired,
-            basicSalary: 0,
+            basicSalary: 50000, // Default salary for employer
             allowance: 0,
             otherBenefits: 0,
         }],
@@ -428,7 +474,7 @@ export const inviteEmployee = (details: { firstName: string, lastName: string, e
         salaryHistory: [{
             id: `sal${Date.now()}`,
             effectiveDate: dateHired,
-            basicSalary: 0,
+            basicSalary: 25000, // Default starting salary
             allowance: 0,
             otherBenefits: 0,
         }],
@@ -441,16 +487,24 @@ export const inviteEmployee = (details: { firstName: string, lastName: string, e
     };
 
     const newEmployee = addEmployee(newEmployeeData);
+    const defaultPassword = 'password123';
 
     const newAccount: UserAccount = {
         email: details.email,
-        password: 'password123', // Default password
+        password: defaultPassword, // Default password
         role: UserRole.EMPLOYEE,
         employeeId: newEmployee.id,
     };
     accounts.push(newAccount);
     saveUserAccounts(accounts);
     
+    // Attempt to send email invitation
+    sendInvitationEmail(
+        `${details.firstName} ${details.lastName}`,
+        details.email,
+        defaultPassword
+    );
+
     return { user: newEmployee, role: UserRole.EMPLOYEE };
 };
 
@@ -458,6 +512,7 @@ export const bulkInviteEmployees = (emailsCsv: string, employmentType: Employmen
     const emails = emailsCsv.split(',').map(e => e.trim()).filter(e => e);
     const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
     const accounts = getUserAccounts();
+    const defaultPassword = 'password123';
 
     emails.forEach(email => {
         if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -490,7 +545,7 @@ export const bulkInviteEmployees = (emailsCsv: string, employmentType: Employmen
             dateHired: dateHired,
             status: EmployeeStatus.ACTIVE,
             employmentType,
-            salaryHistory: [{ id: `sal${Date.now()}`, effectiveDate: dateHired, basicSalary: 0, allowance: 0, otherBenefits: 0 }],
+            salaryHistory: [{ id: `sal${Date.now()}`, effectiveDate: dateHired, basicSalary: 25000, allowance: 0, otherBenefits: 0 }],
             shiftId: 'shift1',
             workSchedule: companyProfile?.workSchedule || WorkSchedule.MONDAY_TO_FRIDAY,
             files: [],
@@ -501,13 +556,16 @@ export const bulkInviteEmployees = (emailsCsv: string, employmentType: Employmen
         const newEmployee = addEmployee(newEmployeeData);
         const newAccount: UserAccount = {
             email,
-            password: 'password123',
+            password: defaultPassword,
             role: UserRole.EMPLOYEE,
             employeeId: newEmployee.id,
         };
         accounts.push(newAccount);
         saveUserAccounts(accounts);
         results.successCount++;
+        
+        // Attempt to send email invitation
+        sendInvitationEmail('Invited User', email, defaultPassword);
     });
 
     return results;
@@ -529,6 +587,7 @@ export const bulkImportEmployees = (csvData: string): { successCount: number, er
     const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
     const accounts = getUserAccounts();
     const allShifts = getShifts();
+    const defaultPassword = 'password123';
 
     for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
@@ -573,7 +632,7 @@ export const bulkImportEmployees = (csvData: string): { successCount: number, er
             dateHired: entry.dateHired || new Date().toISOString().split('T')[0],
             status: EmployeeStatus.ACTIVE,
             employmentType: EmploymentType.PROBATIONARY,
-            salaryHistory: [{ id: `sal${Date.now()}`, effectiveDate: entry.dateHired || new Date().toISOString().split('T')[0], basicSalary: 0, allowance: 0, otherBenefits: 0 }],
+            salaryHistory: [{ id: `sal${Date.now()}`, effectiveDate: entry.dateHired || new Date().toISOString().split('T')[0], basicSalary: 25000, allowance: 0, otherBenefits: 0 }],
             shiftId: shiftId,
             workSchedule: Object.values(WorkSchedule).includes(entry.workSchedule as WorkSchedule) ? entry.workSchedule as WorkSchedule : WorkSchedule.MONDAY_TO_FRIDAY,
             files: [],
@@ -581,10 +640,17 @@ export const bulkImportEmployees = (csvData: string): { successCount: number, er
         };
 
         const newEmployee = addEmployee(newEmployeeData);
-        const newAccount: UserAccount = { email: entry.email, password: 'password123', role: UserRole.EMPLOYEE, employeeId: newEmployee.id };
+        const newAccount: UserAccount = { email: entry.email, password: defaultPassword, role: UserRole.EMPLOYEE, employeeId: newEmployee.id };
         accounts.push(newAccount);
         saveUserAccounts(accounts);
         results.successCount++;
+
+        // Attempt to send email invitation for imported user
+        sendInvitationEmail(
+            `${entry.firstName} ${entry.lastName}`,
+            entry.email,
+            defaultPassword
+        );
     }
 
     return results;
@@ -614,7 +680,7 @@ export const updateEmployee = (updatedEmployee: Employee, editorId: string): Emp
         // Specific handling for salary history addition
         if (updatedEmployee.salaryHistory.length > originalEmployee.salaryHistory.length) {
             const newRecord = updatedEmployee.salaryHistory[updatedEmployee.salaryHistory.length - 1];
-            changes.push({ field: 'Salary Record Added', oldValue: 'N/A', newValue: `Effective ${newRecord.effectiveDate}, Total: ${newRecord.basicSalary + newRecord.allowance + newRecord.otherBenefits}` });
+            changes.push({ field: 'Salary Record Added', oldValue: 'N/A', newValue: `Effective ${newRecord.effectiveDate}, Basic: ${newRecord.basicSalary.toLocaleString()}` });
         }
         
         // Specific handling for custom fields
@@ -840,4 +906,90 @@ export const clearAllData = (): void => {
     appKeys.forEach(key => localStorage.removeItem(key));
 
     initSeedData();
+};
+
+
+// --- Payroll Functions ---
+export const calculatePayrollSummary = (startDate: string, endDate: string) => {
+    const employees = getEmployees().filter(e => e.status === EmployeeStatus.ACTIVE);
+    const attendance = getAttendance();
+    const requests = getRequests();
+    
+    return employees.map(emp => {
+        const latestSalary = [...emp.salaryHistory].sort((a,b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime())[0];
+        
+        // Using a standard 40-hour week, 52 weeks a year to get an hourly rate from monthly salary
+        const hourlyRate = latestSalary ? (latestSalary.basicSalary * 12) / (52 * 40) : 0;
+
+        const empAttendance = attendance.filter(a => {
+            const recordDate = a.clockInTime.split('T')[0];
+            return a.employeeId === emp.id && recordDate >= startDate && recordDate <= endDate && a.clockOutTime;
+        });
+
+        const totalHours = empAttendance.reduce((acc, record) => {
+            const diff = new Date(record.clockOutTime!).getTime() - new Date(record.clockInTime).getTime();
+            return acc + (diff / (1000 * 60 * 60));
+        }, 0);
+        
+        const otHours = requests.filter((r): r is OtUtRequest => 
+            r.employeeId === emp.id && 
+            r.type === RequestType.OVERTIME && 
+            r.status === RequestStatus.APPROVED &&
+            r.date >= startDate && r.date <= endDate
+        ).reduce((acc, r) => acc + r.hours, 0);
+
+        const leaveDays = requests.filter((r): r is LeaveRequest => 
+            r.employeeId === emp.id && 
+            r.type === RequestType.LEAVE && 
+            r.status === RequestStatus.APPROVED &&
+            !(new Date(r.endDate) < new Date(startDate) || new Date(r.startDate) > new Date(endDate))
+        ).reduce((acc, r) => {
+            const duration = (new Date(r.endDate).getTime() - new Date(r.startDate).getTime()) / (1000 * 3600 * 24) + 1;
+            return acc + duration;
+        }, 0);
+        
+        const grossPay = (totalHours * hourlyRate) + (otHours * hourlyRate * 1.5);
+        
+        return {
+            employeeId: emp.id,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            employeeEmail: emp.email,
+            totalHours: totalHours.toFixed(2),
+            otHours: otHours.toFixed(2),
+            leaveDays,
+            grossPay: grossPay.toFixed(2),
+        };
+    });
+};
+
+export const processPayrollAndNotify = async (payrollSummary: any[]): Promise<{successCount: number, errorCount: number}> => {
+     if (
+        EMAILJS_SERVICE_ID === 'YOUR_SERVICE_ID' ||
+        EMAILJS_PAYSLIP_TEMPLATE_ID === 'YOUR_PAYSLIP_TEMPLATE_ID'
+    ) {
+        console.warn(
+            'EmailJS is not configured for payroll. Skipping email notifications. Please set your credentials in services/mockApi.ts.'
+        );
+        alert('EmailJS is not configured for payroll. Notifications were not sent. See console for details.');
+        return { successCount: 0, errorCount: payrollSummary.length };
+    }
+    
+    const companyProfile = getCompanyProfile();
+    let successCount = 0;
+    
+    for (const summary of payrollSummary) {
+         const templateParams = {
+            ...summary,
+            company_name: companyProfile?.name || 'HR Core',
+        };
+
+        try {
+            await (window as any).emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_PAYSLIP_TEMPLATE_ID, templateParams);
+            successCount++;
+        } catch (error) {
+            console.error(`FAILED to send payslip to ${summary.employeeEmail}.`, error);
+        }
+    }
+    
+    return { successCount, errorCount: payrollSummary.length - successCount };
 };

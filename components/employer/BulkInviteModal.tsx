@@ -75,6 +75,10 @@ const BulkInviteModal: React.FC<BulkInviteModalProps> = ({ onClose, onInvite }) 
                         )}
                     </div>
                 )}
+                
+                <div className="text-xs text-slate-500 bg-slate-100 p-2 rounded-md">
+                    <strong>Note:</strong> Email invitations are sent via EmailJS. To enable this, you must add your free API keys to <code>services/mockApi.ts</code> and <code>index.html</code>.
+                </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t">
                     <button type="button" onClick={onClose} className="btn btn-secondary">Close</button>

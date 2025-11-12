@@ -63,7 +63,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
         <Modal isOpen={true} onClose={onClose} title="Add New Employee">
             <form onSubmit={(e) => { e.preventDefault(); handleAddEmployee(); }} className="space-y-4">
                 <p className="text-sm text-slate-600">
-                    Enter the new employee's details. They will be added to the system, and you can share their login credentials with them. The default password is 'password123'.
+                    An invitation email will be sent to the employee with a default password of 'password123'. They will be prompted to complete their profile upon first login.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -89,6 +89,10 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
                 </div>
 
                 {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
+
+                <div className="text-xs text-slate-500 bg-slate-100 p-2 rounded-md">
+                    <strong>Note:</strong> Email invitations are sent via EmailJS. To enable this, you must add your free API keys to <code>services/mockApi.ts</code> and <code>index.html</code>.
+                </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t">
                     <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
