@@ -85,7 +85,7 @@ export const registerEmployer = async (
         currentCompanyId = newCompany.id;
 
         // Create default shifts for the company
-        await supabase.from('shifts').insert([
+        const { data: shifts, error: shiftsError } = await supabase.from('shifts').insert([
             {
                 company_id: newCompany.id,
                 name: 'Morning Shift',
@@ -98,15 +98,12 @@ export const registerEmployer = async (
                 start_time: '22:00',
                 end_time: '07:00',
             },
-        ]);
+        ]).select();
+
+        if (shiftsError) throw shiftsError;
 
         // Get the default shift
-        const { data: defaultShift } = await supabase
-            .from('shifts')
-            .select('id')
-            .eq('company_id', newCompany.id)
-            .limit(1)
-            .single();
+        const defaultShift = shifts && shifts.length > 0 ? shifts[0] : null;
 
         // Create employee record for the employer
         const { data: newEmployee, error: employeeError } = await supabase
@@ -121,7 +118,7 @@ export const registerEmployer = async (
                 date_hired: new Date().toISOString().split('T')[0],
                 status: EmployeeStatus.ACTIVE,
                 employment_type: EmploymentType.FULL_TIME,
-                shift_id: defaultShift?.id,
+                shift_id: defaultShift?.id || null,
                 work_schedule: WorkSchedule.MONDAY_TO_FRIDAY,
             }])
             .select()
