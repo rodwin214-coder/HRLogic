@@ -792,6 +792,52 @@ export const getRequests = async (): Promise<AppRequest[]> => {
     }
 };
 
+export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' | 'dateFiled'>): Promise<AppRequest> => {
+    try {
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { data, error } = await supabase
+            .from('requests')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: requestData.employeeId,
+                request_type: requestData.type,
+                status: RequestStatus.PENDING,
+                date_filed: new Date().toISOString(),
+                leave_type: requestData.leaveType,
+                start_date: requestData.startDate,
+                end_date: requestData.endDate,
+                date: requestData.date,
+                hours: requestData.hours,
+                reason: requestData.reason,
+                changes: requestData.changes,
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return {
+            id: data.id,
+            employeeId: data.employee_id,
+            type: data.request_type,
+            status: data.status,
+            dateFiled: data.date_filed,
+            leaveType: data.leave_type,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            date: data.date,
+            hours: parseFloat(data.hours || 0),
+            reason: data.reason,
+            changes: data.changes,
+        };
+    } catch (error) {
+        console.error('Error adding request:', error);
+        throw error;
+    }
+};
+
 export const getAttendance = async (): Promise<AttendanceRecord[]> => {
     try {
         const { data, error } = await supabase
@@ -913,7 +959,8 @@ export const clockOut = async (
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
-            .gte('clock_in_time', `${today}T00:00:00`)
+            .gte('clock_in_time', `${today}T00:00:00Z`)
+            .lte('clock_in_time', `${today}T23:59:59Z`)
             .is('clock_out_time', null)
             .maybeSingle();
 
@@ -1097,6 +1144,44 @@ export const updateTask = async (task: Task): Promise<Task> => {
         };
     } catch (error) {
         console.error('Error updating task:', error);
+        throw error;
+    }
+};
+
+export const addTask = async (taskData: Omit<Task, 'id'>): Promise<Task> => {
+    try {
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { data, error } = await supabase
+            .from('tasks')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: taskData.employeeId,
+                title: taskData.title,
+                description: taskData.description,
+                due_date: taskData.dueDate,
+                status: taskData.status || TaskStatus.TODO,
+                date_created: taskData.dateCreated || new Date().toISOString(),
+                date_completed: taskData.dateCompleted,
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        return {
+            id: data.id,
+            employeeId: data.employee_id,
+            title: data.title,
+            description: data.description || '',
+            dueDate: data.due_date,
+            status: data.status || TaskStatus.TODO,
+            dateCreated: data.date_created,
+            dateCompleted: data.date_completed,
+        };
+    } catch (error) {
+        console.error('Error adding task:', error);
         throw error;
     }
 };

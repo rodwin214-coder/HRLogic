@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { UserContext } from '../../App';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, Task, TaskStatus, Employee, CompanyProfile } from '../../types';
 import ClockInOut from './ClockInOut';
 import Modal from '../common/Modal';
@@ -17,28 +17,32 @@ const MyTasks: React.FC = () => {
     const [colleagues, setColleagues] = useState<Employee[]>([]);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    const fetchTasks = useCallback(() => {
+    const fetchTasks = useCallback(async () => {
         if (user) {
-            setTasks(api.getTasksForEmployee(user.id));
+            const tasksData = await api.getTasksForEmployee(user.id);
+            setTasks(tasksData);
         }
     }, [user]);
 
     useEffect(() => {
-        fetchTasks();
-        if (user) {
-            const allEmployees = api.getEmployees();
-            const departmentColleagues = allEmployees.filter(e => e.department === user.department && e.status === 'Active');
-            setColleagues(departmentColleagues);
-        }
+        const loadData = async () => {
+            await fetchTasks();
+            if (user) {
+                const allEmployees = await api.getEmployees();
+                const departmentColleagues = allEmployees.filter(e => e.department === user.department && e.status === EmployeeStatus.ACTIVE);
+                setColleagues(departmentColleagues);
+            }
+        };
+        loadData();
     }, [fetchTasks, user]);
     
-    const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
+    const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
         const updatedTask = { ...task, status: newStatus };
         if (newStatus === TaskStatus.COMPLETED && !task.dateCompleted) {
             updatedTask.dateCompleted = new Date().toISOString();
         }
-        api.updateTask(updatedTask);
-        fetchTasks();
+        await api.updateTask(updatedTask);
+        await fetchTasks();
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -55,7 +59,7 @@ const MyTasks: React.FC = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleAddTask = () => {
+    const handleAddTask = async () => {
         if (!user || !validateNewTask()) return;
 
         const { title, description, dueDate, assigneeId } = newTask;
@@ -68,10 +72,10 @@ const MyTasks: React.FC = () => {
             status: TaskStatus.TODO,
             dateCreated: new Date().toISOString(),
         };
-        api.addTask(taskData);
+        await api.addTask(taskData);
         setNewTask({ title: '', description: '', dueDate: '', assigneeId: user.id });
         setShowAddForm(false);
-        fetchTasks();
+        await fetchTasks();
     };
 
     const groupedTasks = useMemo(() => {
@@ -203,15 +207,15 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
         validate();
     }, [reason, startDate, endDate, otUtDate, hours, validate]);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!user || !validate()) return;
-        
+
         if (type === RequestType.LEAVE) {
             const request = { employeeId: user.id, type: RequestType.LEAVE, leaveType, startDate, endDate, reason };
-            api.addRequest(request);
+            await api.addRequest(request);
         } else {
             const request = { employeeId: user.id, type, date: otUtDate, hours: Number(hours), reason };
-            api.addRequest(request);
+            await api.addRequest(request);
         }
         onSubmit();
         onClose();
@@ -291,12 +295,19 @@ const EmployeeDashboard: React.FC = () => {
     const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
     const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
 
-    const fetchData = useCallback(() => {
+    const fetchData = useCallback(async () => {
         if (user) {
-            setRequests(api.getRequests().filter(r => r.employeeId === user.id).sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
-            setTodaysRecord(api.getTodaysAttendance(user.id));
-            setLeaveBalance(api.calculateLeaveBalance(user.id));
-            setCompanyProfile(api.getCompanyProfile());
+            const [requestsData, attendanceData, leaveBalanceData, companyProfileData] = await Promise.all([
+                api.getRequests(),
+                api.getTodaysAttendance(user.id),
+                api.calculateLeaveBalance(user.id),
+                api.getCompanyProfile()
+            ]);
+
+            setRequests(requestsData.filter(r => r.employeeId === user.id).sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
+            setTodaysRecord(attendanceData);
+            setLeaveBalance(leaveBalanceData);
+            setCompanyProfile(companyProfileData);
         }
     }, [user]);
 
