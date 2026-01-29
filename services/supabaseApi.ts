@@ -253,6 +253,7 @@ const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> =
 
     return {
         id: dbEmployee.id,
+        companyId: dbEmployee.company_id,
         employeeId: dbEmployee.employee_id,
         email: dbEmployee.email,
         firstName: dbEmployee.first_name,
@@ -847,13 +848,11 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
     }
 };
 
-export const clockIn = async (record: Omit<AttendanceRecord, 'id'>): Promise<AttendanceRecord> => {
-    if (!currentCompanyId) throw new Error('No company context');
-
+export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: string): Promise<AttendanceRecord> => {
     const { data, error } = await supabase
         .from('attendance_records')
         .insert([{
-            company_id: currentCompanyId,
+            company_id: companyId,
             employee_id: record.employeeId,
             clock_in_time: record.clockInTime,
             clock_in_photo: record.clockInPhoto,
@@ -862,7 +861,10 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>): Promise<Att
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) {
+        console.error('Clock in error:', error);
+        throw error;
+    }
     return {
         id: data.id,
         employeeId: data.employee_id,

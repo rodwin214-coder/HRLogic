@@ -260,7 +260,7 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                     clockInPhoto: photo,
                     clockInLocation: currentLocation,
                 };
-                await api.clockIn(record);
+                await api.clockIn(record, user.companyId);
                 onUpdate();
                 setPhoto(null);
                 setCurrentLocation(null);

@@ -92,6 +92,7 @@ export interface CustomFieldDefinition {
 
 export interface Employee {
     id: string;
+    companyId: string;
     employeeId: string;
     email: string;
     firstName: string;
@@ -114,7 +115,7 @@ export interface Employee {
     workSchedule?: WorkSchedule;
     profilePicture?: string; // base64 string
     // For simplicity, we'll store file names. In a real app, this would be a link to storage.
-    files: string[]; 
+    files: string[];
     notes?: string;
     vacationLeaveAdjustment?: number;
     sickLeaveAdjustment?: number;
