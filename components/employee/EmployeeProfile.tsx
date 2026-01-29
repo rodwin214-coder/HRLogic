@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { UserContext } from '../../App';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { Employee, RequestType, LeaveBalance, CustomFieldDefinition } from '../../types';
 import Modal from '../common/Modal';
 import ChangePasswordModal from './ChangePasswordModal';
@@ -85,26 +85,33 @@ const EmployeeProfile: React.FC = () => {
     const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
     const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
-    const refreshEmployee = () => {
+    const refreshEmployee = async () => {
         if (user) {
-            const freshData = api.getEmployeeById(user.id);
-            if(freshData) {
+            const [freshData, leaveBalanceData, customFieldDefsData] = await Promise.all([
+                api.getEmployeeById(user.id),
+                api.calculateLeaveBalance(user.id),
+                api.getCustomFieldDefinitions()
+            ]);
+
+            if (freshData) {
                 setEmployee(freshData);
                 setFormData(freshData);
-            };
-            setLeaveBalance(api.calculateLeaveBalance(user.id));
-            setCustomFieldDefs(api.getCustomFieldDefinitions());
+            }
+            setLeaveBalance(leaveBalanceData);
+            setCustomFieldDefs(customFieldDefsData);
         }
     };
 
-    useEffect(refreshEmployee, [user]);
+    useEffect(() => {
+        refreshEmployee();
+    }, [user]);
 
     const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0] && employee) {
             const file = e.target.files[0];
             const base64 = await fileToBase64(file);
-            api.updateProfilePicture(employee.id, base64);
-            refreshEmployee();
+            await api.updateProfilePicture(employee.id, base64);
+            await refreshEmployee();
         }
     };
     
@@ -150,23 +157,23 @@ const EmployeeProfile: React.FC = () => {
         }
     };
     
-    const handleSubmitChangeRequest = (reason: string) => {
+    const handleSubmitChangeRequest = async (reason: string) => {
         if (!employee || !pendingChanges) return;
-        
+
         const request = {
             employeeId: employee.id,
             type: RequestType.CHANGE_REQUEST,
             changes: pendingChanges,
             reason,
         };
-        api.addRequest(request);
-        
+        await api.addRequest(request);
+
         alert("Your change request has been submitted for approval.");
-        
+
         setIsReasonModalOpen(false);
         setPendingChanges(null);
         setIsEditing(false);
-        refreshEmployee();
+        await refreshEmployee();
     };
 
     if (!employee || !formData) return <div>Loading profile...</div>;

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import Modal from './Modal';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 
 interface ForgotPasswordModalProps {
     onClose: () => void;

@@ -10,6 +10,7 @@ import {
     AppRequest,
     AttendanceRecord,
     Task,
+    TaskStatus,
     LeavePolicy,
     CustomFieldDefinition,
     EmployeeStatus,
@@ -19,6 +20,7 @@ import {
     LeaveType,
     LeaveBalance,
     WorkSchedule,
+    AuditLog,
 } from '../types';
 
 // Store current session info
@@ -1184,6 +1186,107 @@ export const addTask = async (taskData: Omit<Task, 'id'>): Promise<Task> => {
         console.error('Error adding task:', error);
         throw error;
     }
+};
+
+export const addHoliday = async (holiday: Omit<Holiday, 'id'>): Promise<Holiday> => {
+    console.warn('addHoliday: Not yet implemented in Supabase');
+    return { ...holiday, id: 'temp-id' };
+};
+
+export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
+    console.warn('changePassword: Not yet implemented in Supabase');
+    return { success: false, message: 'Password change not yet implemented' };
+};
+
+export const getCustomFieldDefinitions = async (): Promise<CustomFieldDefinition[]> => {
+    console.warn('getCustomFieldDefinitions: Not yet implemented in Supabase');
+    return [];
+};
+
+export const updateProfilePicture = async (employeeId: string, base64Image: string): Promise<void> => {
+    console.warn('updateProfilePicture: Not yet implemented in Supabase');
+};
+
+export const updateRequestStatus = async (requestId: string, status: RequestStatus, editorId: string): Promise<AppRequest | undefined> => {
+    console.warn('updateRequestStatus: Not yet implemented in Supabase');
+    return undefined;
+};
+
+export const resetEmployeePassword = (employeeId: string, newPassword: string): { success: boolean, message: string } => {
+    console.warn('resetEmployeePassword: Not yet implemented in Supabase');
+    return { success: false, message: 'Password reset not yet implemented' };
+};
+
+export const adjustLeaveBalance = (employeeId: string, leaveType: string, days: number, reason: string, adjustedBy: string): void => {
+    console.warn('adjustLeaveBalance: Not yet implemented in Supabase');
+};
+
+export const getAuditLogsForEmployee = async (employeeId: string): Promise<AuditLog[]> => {
+    console.warn('getAuditLogsForEmployee: Not yet implemented in Supabase');
+    return [];
+};
+
+export const bulkInviteEmployees = async (csvData: string): Promise<{ successCount: number, errors: string[] }> => {
+    console.warn('bulkInviteEmployees: Not yet implemented in Supabase');
+    return { successCount: 0, errors: ['Bulk invite not yet implemented'] };
+};
+
+export const updateAttendance = async (record: AttendanceRecord): Promise<void> => {
+    console.warn('updateAttendance: Not yet implemented in Supabase');
+};
+
+export const addManualAttendance = async (record: Omit<AttendanceRecord, 'id'>, reason: string, addedBy: string): Promise<void> => {
+    console.warn('addManualAttendance: Not yet implemented in Supabase');
+};
+
+export const calculatePayrollSummary = (attendance: AttendanceRecord[], employees: Employee[], shifts: Shift[], startDate: string, endDate: string): any => {
+    console.warn('calculatePayrollSummary: Not yet implemented in Supabase');
+    return { employees: [], totalPayroll: 0 };
+};
+
+export const processPayrollAndNotify = async (payrollData: any): Promise<void> => {
+    console.warn('processPayrollAndNotify: Not yet implemented in Supabase');
+};
+
+export const deleteShift = async (shiftId: string): Promise<void> => {
+    console.warn('deleteShift: Not yet implemented in Supabase');
+};
+
+export const updateShift = async (shift: Shift): Promise<Shift> => {
+    console.warn('updateShift: Not yet implemented in Supabase');
+    return shift;
+};
+
+export const addShift = async (shift: Omit<Shift, 'id'>): Promise<Shift> => {
+    console.warn('addShift: Not yet implemented in Supabase');
+    return { ...shift, id: 'temp-id' };
+};
+
+export const getLeavePolicy = async (): Promise<LeavePolicy | undefined> => {
+    console.warn('getLeavePolicy: Not yet implemented in Supabase');
+    return undefined;
+};
+
+export const updateLeavePolicy = async (policy: LeavePolicy): Promise<void> => {
+    console.warn('updateLeavePolicy: Not yet implemented in Supabase');
+};
+
+export const deleteCustomFieldDefinition = async (defId: string): Promise<void> => {
+    console.warn('deleteCustomFieldDefinition: Not yet implemented in Supabase');
+};
+
+export const updateCustomFieldDefinition = async (def: CustomFieldDefinition): Promise<void> => {
+    console.warn('updateCustomFieldDefinition: Not yet implemented in Supabase');
+};
+
+export const addCustomFieldDefinition = async (def: Omit<CustomFieldDefinition, 'id'>): Promise<CustomFieldDefinition> => {
+    console.warn('addCustomFieldDefinition: Not yet implemented in Supabase');
+    return { ...def, id: 'temp-id' };
+};
+
+export const requestPasswordReminder = async (email: string): Promise<{ success: boolean, message: string }> => {
+    console.warn('requestPasswordReminder: Not yet implemented in Supabase');
+    return { success: false, message: 'Password reminder not yet implemented' };
 };
 
 // Export the WORKLOGIX_LOGO_BASE64 for compatibility

@@ -3,10 +3,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { UserRole, Employee } from './types';
 import * as api from './services/supabaseApi';
+import { WORKLOGIX_LOGO_BASE64 } from './services/supabaseApi';
 import EmployeeDashboard from './components/employee/EmployeeDashboard';
 import EmployerDashboard from './components/employer/EmployerDashboard';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
-import { WORKLOGIX_LOGO_BASE64 } from './services/mockApi';
 
 interface UserContextType {
     user: Employee | null;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import Modal from '../common/Modal';
 import { Employee, AttendanceRecord } from '../../types';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { UserContext } from '../../App';
 
 interface ManualAttendanceModalProps {

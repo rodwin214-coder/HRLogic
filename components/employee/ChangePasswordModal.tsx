@@ -1,7 +1,7 @@
 import React, { useState, useContext, useCallback, useEffect } from 'react';
 import Modal from '../common/Modal';
 import { UserContext } from '../../App';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 
 interface ChangePasswordModalProps {
     onClose: () => void;

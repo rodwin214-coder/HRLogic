@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { Holiday, AppRequest, Employee, RequestStatus, RequestType, LeaveRequest } from '../../types';
 import Modal from '../common/Modal';
 

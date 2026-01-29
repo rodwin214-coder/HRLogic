@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { Shift } from '../../types';
 
 const ShiftManagement: React.FC = () => {

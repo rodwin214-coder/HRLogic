@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { CustomFieldDefinition, CustomFieldType } from '../../types';
 
 const CustomFieldsSetup: React.FC = () => {

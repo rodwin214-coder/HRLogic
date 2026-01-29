@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useCallback, useEffect } from 'react';
 import { UserContext } from '../../App';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { Employee } from '../../types';
 
 interface CompleteProfileModalProps {
@@ -56,11 +56,10 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ onSuccess }
         }
     };
     
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (user && formData && validate()) {
-            // Employee is filling their own info for the first time, so they are the "editor"
-            api.updateEmployee(formData, user.id);
+            await api.updateEmployee(formData, user.id);
             onSuccess();
         }
     };

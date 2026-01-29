@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { LeavePolicy } from '../../types';
 
 // FIX: Moved helper component to the top level to prevent re-creation on re-renders, fixing the input bug.

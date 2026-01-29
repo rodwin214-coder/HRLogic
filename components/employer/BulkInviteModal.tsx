@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Modal from '../common/Modal';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { EmploymentType } from '../../types';
 
 interface BulkInviteModalProps {

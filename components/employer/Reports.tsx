@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { AttendanceRecord, Employee, Shift, AppRequest, Holiday, RequestType, RequestStatus, CompanyProfile, WorkSchedule } from '../../types';
 import ManualAttendanceModal from './ManualAttendanceModal';
 

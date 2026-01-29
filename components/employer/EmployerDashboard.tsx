@@ -9,7 +9,7 @@ import ShiftManagement from './ShiftManagement';
 import CompanyProfile from './CompanyProfile';
 import LeaveSetup from './LeaveSetup';
 import { UserContext } from '../../App';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { CompanyProfile as CompanyProfileType, RequestStatus } from '../../types';
 import CustomFieldsSetup from './CustomFieldsSetup';
 
