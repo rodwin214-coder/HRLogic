@@ -350,7 +350,7 @@ export const inviteEmployee = async (employeeData: {
         const generatedEmployeeId = `emp${Date.now()}`;
 
         // Hash default password
-        const defaultPassword = 'password123';
+        const defaultPassword = 'qwerty123';
         const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
         // Create employee record
@@ -547,7 +547,7 @@ export const bulkImportEmployees = async (csvData: string): Promise<{ successCou
         }
 
         const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
-        const defaultPassword = 'password123';
+        const defaultPassword = 'qwerty123';
         const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
         for (let i = 1; i < lines.length; i++) {
