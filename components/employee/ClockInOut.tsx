@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { GeolocationData, AttendanceRecord, Task, TaskStatus } from '../../types';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { UserContext } from '../../App';
 import Modal from '../common/Modal';
 
@@ -18,17 +18,21 @@ const TaskUpdateOnClockOutModal: React.FC<TaskUpdateOnClockOutModalProps> = ({ i
 
     useEffect(() => {
         if (isOpen && user) {
-            const inProgressTasks = api.getTasksForEmployee(user.id).filter(t => t.status === TaskStatus.IN_PROGRESS);
-            setTasks(inProgressTasks);
+            const loadTasks = async () => {
+                const allTasks = await api.getTasksForEmployee(user.id);
+                const inProgressTasks = allTasks.filter(t => t.status === TaskStatus.IN_PROGRESS);
+                setTasks(inProgressTasks);
+            };
+            loadTasks();
         }
     }, [isOpen, user]);
 
-    const handleStatusUpdate = (task: Task, newStatus: TaskStatus) => {
+    const handleStatusUpdate = async (task: Task, newStatus: TaskStatus) => {
         const updatedTask = { ...task, status: newStatus };
         if (newStatus === TaskStatus.COMPLETED) {
             updatedTask.dateCompleted = new Date().toISOString();
         }
-        api.updateTask(updatedTask);
+        await api.updateTask(updatedTask);
         // Refresh list
         setTasks(prev => prev.filter(t => t.id !== task.id));
     };
@@ -223,9 +227,9 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
         }
     }, []);
 
-    const performClockOut = (notes: string) => {
+    const performClockOut = async (notes: string) => {
         if (!user) return;
-        api.clockOut(user.id, {
+        await api.clockOut(user.id, {
             clockOutPhoto: photo!,
             clockOutLocation: currentLocation!,
             endOfDayNotes: notes,
@@ -256,17 +260,17 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                     clockInPhoto: photo,
                     clockInLocation: currentLocation,
                 };
-                api.clockIn(record);
+                await api.clockIn(record);
                 onUpdate();
                 setPhoto(null);
                 setCurrentLocation(null);
                 setLoading(false);
             } else { // Clocking Out - Check for tasks
-                const tasks = api.getTasksForEmployee(user.id);
+                const tasks = await api.getTasksForEmployee(user.id);
                 if (tasks.some(t => t.status === TaskStatus.IN_PROGRESS)) {
                     setIsTaskModalOpen(true);
                 } else {
-                     performClockOut('');
+                     await performClockOut('');
                 }
             }
         } catch (err: any) {

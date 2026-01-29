@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Modal from '../common/Modal';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 
 interface AddEmployeeModalProps {
     onClose: () => void;
@@ -42,19 +42,19 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAddEmployee = () => {
+    const handleAddEmployee = async () => {
         if (!validate()) return;
-        
+
         setIsAdding(true);
         setApiError('');
-        const result = api.inviteEmployee(formData);
-        
+        const result = await api.inviteEmployee(formData);
+
         if ('error' in result) {
             setApiError(result.error);
+            setIsAdding(false);
         } else {
             onSuccess(); // This refreshes the parent list and closes the modal
         }
-        setIsAdding(false);
     };
 
     const isFormValid = Object.keys(errors).length === 0;

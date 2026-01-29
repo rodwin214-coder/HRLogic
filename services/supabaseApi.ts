@@ -323,6 +323,77 @@ export const getEmployees = async (): Promise<Employee[]> => {
     }
 };
 
+export const inviteEmployee = async (employeeData: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    department: string;
+}): Promise<Employee | { error: string }> => {
+    try {
+        if (!currentCompanyId) {
+            return { error: 'Company not found. Please log in again.' };
+        }
+
+        // Check if email already exists in the company
+        const { data: existingAccount } = await supabase
+            .from('user_accounts')
+            .select('email')
+            .eq('company_id', currentCompanyId)
+            .eq('email', employeeData.email)
+            .maybeSingle();
+
+        if (existingAccount) {
+            return { error: 'An employee with this email already exists in your company.' };
+        }
+
+        // Generate employee ID (e.g., "emp" + timestamp)
+        const generatedEmployeeId = `emp${Date.now()}`;
+
+        // Hash default password
+        const defaultPassword = 'password123';
+        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+        // Create employee record
+        const { data: newEmployee, error: employeeError } = await supabase
+            .from('employees')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: generatedEmployeeId,
+                email: employeeData.email,
+                first_name: employeeData.firstName,
+                last_name: employeeData.lastName,
+                department: employeeData.department,
+                date_hired: new Date().toISOString().split('T')[0],
+                status: EmployeeStatus.ACTIVE,
+                employment_type: EmploymentType.PROBATIONARY,
+            }])
+            .select()
+            .single();
+
+        if (employeeError) throw employeeError;
+
+        // Create user account
+        const { error: accountError } = await supabase
+            .from('user_accounts')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: newEmployee.id,
+                email: employeeData.email,
+                password_hash: passwordHash,
+                role: UserRole.EMPLOYEE,
+            }]);
+
+        if (accountError) throw accountError;
+
+        // Convert to Employee type
+        const employee = await convertDbEmployeeToEmployee(newEmployee);
+        return employee;
+    } catch (error: any) {
+        console.error('Error inviting employee:', error);
+        return { error: error.message || 'Failed to add employee. Please try again.' };
+    }
+};
+
 // Company Profile Functions
 export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
     try {
@@ -694,9 +765,61 @@ export const getTasks = (): Task[] => {
     return [];
 };
 
-export const getTasksForEmployee = (employeeId: string): Task[] => {
-    // TODO: Implement with Supabase
-    return [];
+export const getTasksForEmployee = async (employeeId: string): Promise<Task[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .order('due_date', { ascending: true });
+
+        if (error) throw error;
+        return (data || []).map((t: any) => ({
+            id: t.id,
+            employeeId: t.employee_id,
+            title: t.title,
+            description: t.description || '',
+            dueDate: t.due_date,
+            status: t.status || TaskStatus.TODO,
+            dateCreated: t.date_created,
+            dateCompleted: t.date_completed,
+        }));
+    } catch (error) {
+        console.error('Error fetching tasks:', error);
+        return [];
+    }
+};
+
+export const updateTask = async (task: Task): Promise<Task> => {
+    try {
+        const { data, error } = await supabase
+            .from('tasks')
+            .update({
+                title: task.title,
+                description: task.description,
+                due_date: task.dueDate,
+                status: task.status,
+                date_completed: task.dateCompleted,
+            })
+            .eq('id', task.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return {
+            id: data.id,
+            employeeId: data.employee_id,
+            title: data.title,
+            description: data.description || '',
+            dueDate: data.due_date,
+            status: data.status || TaskStatus.TODO,
+            dateCreated: data.date_created,
+            dateCompleted: data.date_completed,
+        };
+    } catch (error) {
+        console.error('Error updating task:', error);
+        throw error;
+    }
 };
 
 // Export the WORKLOGIX_LOGO_BASE64 for compatibility
