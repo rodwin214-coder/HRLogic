@@ -188,13 +188,30 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
             (position) => {
                 setCurrentLocation({
                     latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy
                 });
             },
-            () => {
-                setLocationError('Unable to retrieve location. Please grant permission.');
+            (error) => {
+                let errorMsg = 'Unable to retrieve location.';
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMsg = 'Location permission denied. Please enable location access.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMsg = 'Location information unavailable.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMsg = 'Location request timed out. Please try again.';
+                        break;
+                }
+                setLocationError(errorMsg);
             },
-            { enableHighAccuracy: true }
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
         );
     }, []);
 
@@ -341,9 +358,16 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-2 backdrop-blur-sm">
                                 <p className="font-mono text-center tracking-wider">{currentTime.toLocaleString()}</p>
                                 {currentLocation ? (
-                                    <p className="font-mono text-center">
-                                        {`Lat: ${currentLocation.latitude.toFixed(5)}, Lon: ${currentLocation.longitude.toFixed(5)}`}
-                                    </p>
+                                    <>
+                                        <p className="font-mono text-center">
+                                            {`Lat: ${currentLocation.latitude.toFixed(5)}, Lon: ${currentLocation.longitude.toFixed(5)}`}
+                                        </p>
+                                        {currentLocation.accuracy !== undefined && (
+                                            <p className={`text-center text-xs mt-1 ${currentLocation.accuracy <= 50 ? 'text-green-400' : currentLocation.accuracy <= 100 ? 'text-yellow-400' : 'text-orange-400'}`}>
+                                                Accuracy: ±{currentLocation.accuracy.toFixed(0)}m {currentLocation.accuracy <= 50 ? '(Excellent)' : currentLocation.accuracy <= 100 ? '(Good)' : '(Fair)'}
+                                            </p>
+                                        )}
+                                    </>
                                 ) : (
                                     <p className="text-yellow-400 text-center">{locationError || 'Acquiring location...'}</p>
                                 )}

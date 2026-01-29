@@ -157,6 +157,7 @@ export type AppRequest = LeaveRequest | OtUtRequest | ChangeRequest;
 export interface GeolocationData {
     latitude: number;
     longitude: number;
+    accuracy?: number;
 }
 
 export interface AttendanceRecord {

@@ -234,7 +234,9 @@ export const Reports: React.FC = () => {
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
                     const clockIn = new Date(record.clockInTime).toLocaleTimeString();
-                    const location = record.clockInLocation ? `${record.clockInLocation.latitude}, ${record.clockInLocation.longitude}` : 'N/A';
+                    const location = record.clockInLocation
+                        ? `${record.clockInLocation.latitude}, ${record.clockInLocation.longitude}${record.clockInLocation.accuracy ? ` (±${record.clockInLocation.accuracy.toFixed(0)}m)` : ''}`
+                        : 'N/A';
                     const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A';
                     const { totalHours, status } = calculateStatus(record);
                     csvContent += [empName, date, clockIn, location, clockOut, totalHours, status].map(escapeCSV).join(",") + "\n";
@@ -265,7 +267,9 @@ export const Reports: React.FC = () => {
                     const employee = getEmployee(record.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
-                    const locationInfo = record.clockInLocation ? ` Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)})` : '';
+                    const locationInfo = record.clockInLocation
+                        ? ` Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
+                        : '';
                     const details = `Clock In: ${new Date(record.clockInTime).toLocaleTimeString()}, Clock Out: ${record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A'}${locationInfo}`;
                     const { totalHours } = calculateStatus(record);
                     csvContent += ["Attendance", empName, date, details, totalHours].map(escapeCSV).join(",") + "\n";
@@ -406,19 +410,26 @@ export const Reports: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleTimeString()}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {record.clockInLocation ? (
-                                            <a 
-                                                href={`https://www.google.com/maps?q=${record.clockInLocation.latitude},${record.clockInLocation.longitude}`} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="text-indigo-600 hover:text-indigo-900 hover:underline inline-flex items-center gap-1"
-                                                title={`Lat: ${record.clockInLocation.latitude}, Lon: ${record.clockInLocation.longitude}`}
-                                            >
-                                                View on Map
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                </svg>
-                                            </a>
+                                            <div className="flex flex-col gap-1">
+                                                <a
+                                                    href={`https://www.google.com/maps?q=${record.clockInLocation.latitude},${record.clockInLocation.longitude}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-indigo-600 hover:text-indigo-900 hover:underline inline-flex items-center gap-1"
+                                                    title={`Lat: ${record.clockInLocation.latitude}, Lon: ${record.clockInLocation.longitude}`}
+                                                >
+                                                    View on Map
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    </svg>
+                                                </a>
+                                                {record.clockInLocation.accuracy !== undefined && (
+                                                    <span className={`text-xs ${record.clockInLocation.accuracy <= 50 ? 'text-green-600' : record.clockInLocation.accuracy <= 100 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                                                        ±{record.clockInLocation.accuracy.toFixed(0)}m
+                                                    </span>
+                                                )}
+                                            </div>
                                         ) : 'N/A'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '---'}</td>

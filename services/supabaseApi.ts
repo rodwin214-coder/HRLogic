@@ -951,7 +951,7 @@ export const clockOut = async (
     employeeId: string,
     clockOutData: {
         clockOutPhoto: string;
-        clockOutLocation: { latitude: number; longitude: number };
+        clockOutLocation: { latitude: number; longitude: number; accuracy?: number };
         endOfDayNotes?: string;
     }
 ): Promise<AttendanceRecord | undefined> => {
