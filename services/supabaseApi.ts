@@ -825,11 +825,19 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
-            .gte('clock_in_time', `${today}T00:00:00`)
-            .lt('clock_in_time', `${today}T23:59:59`)
+            .gte('clock_in_time', `${today}T00:00:00Z`)
+            .lte('clock_in_time', `${today}T23:59:59Z`)
+            .order('clock_in_time', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
-        if (error || !data) return undefined;
+        if (error) {
+            console.error('Error fetching today\'s attendance:', error);
+            return undefined;
+        }
+
+        if (!data) return undefined;
+
         return {
             id: data.id,
             employeeId: data.employee_id,
@@ -849,6 +857,20 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
 };
 
 export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: string): Promise<AttendanceRecord> => {
+    // Check if already clocked in today
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existingRecord } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('employee_id', record.employeeId)
+        .gte('clock_in_time', `${today}T00:00:00Z`)
+        .lte('clock_in_time', `${today}T23:59:59Z`)
+        .maybeSingle();
+
+    if (existingRecord) {
+        throw new Error('You have already clocked in today.');
+    }
+
     const { data, error } = await supabase
         .from('attendance_records')
         .insert([{
