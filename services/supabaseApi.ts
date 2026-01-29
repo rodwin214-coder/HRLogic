@@ -1342,12 +1342,77 @@ export const addShift = async (shift: Omit<Shift, 'id'>): Promise<Shift> => {
 };
 
 export const getLeavePolicy = async (): Promise<LeavePolicy | undefined> => {
-    console.warn('getLeavePolicy: Not yet implemented in Supabase');
-    return undefined;
+    try {
+        if (!currentCompanyId) {
+            console.error('No company ID set');
+            return undefined;
+        }
+
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('leave_policies')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching leave policy:', error);
+            return undefined;
+        }
+
+        if (!data) {
+            return undefined;
+        }
+
+        return {
+            id: data.id,
+            baseVacationDaysPerYear: parseFloat(data.base_vacation_days_per_year || 0),
+            baseSickDaysPerYear: parseFloat(data.base_sick_days_per_year || 0),
+            tenureBonusEnabled: data.tenure_bonus_enabled || false,
+            tenureBonusYearsInterval: parseFloat(data.tenure_bonus_years_interval || 0),
+            maxTenureBonusDays: parseFloat(data.max_tenure_bonus_days || 0),
+        };
+    } catch (error) {
+        console.error('Error in getLeavePolicy:', error);
+        return undefined;
+    }
 };
 
 export const updateLeavePolicy = async (policy: LeavePolicy): Promise<void> => {
-    console.warn('updateLeavePolicy: Not yet implemented in Supabase');
+    try {
+        if (!currentCompanyId) {
+            throw new Error('No company ID set');
+        }
+
+        await ensureUserContext();
+
+        const dbPolicy = {
+            company_id: currentCompanyId,
+            base_vacation_days_per_year: policy.baseVacationDaysPerYear,
+            base_sick_days_per_year: policy.baseSickDaysPerYear,
+            tenure_bonus_enabled: policy.tenureBonusEnabled,
+            tenure_bonus_years_interval: policy.tenureBonusYearsInterval,
+            max_tenure_bonus_days: policy.maxTenureBonusDays,
+        };
+
+        if (policy.id && policy.id !== 'temp-id') {
+            const { error } = await supabase
+                .from('leave_policies')
+                .update(dbPolicy)
+                .eq('id', policy.id);
+
+            if (error) throw error;
+        } else {
+            const { error } = await supabase
+                .from('leave_policies')
+                .insert(dbPolicy);
+
+            if (error) throw error;
+        }
+    } catch (error) {
+        console.error('Error updating leave policy:', error);
+        throw error;
+    }
 };
 
 export const deleteCustomFieldDefinition = async (defId: string): Promise<void> => {
