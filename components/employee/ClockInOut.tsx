@@ -404,79 +404,77 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                 </div>
             )}
 
-            {isClockedOut ? (
-                 <div className="text-center p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
+            {isClockedOut && (
+                 <div className="text-center p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 mb-4">
                     <p className="font-semibold">Session Completed</p>
                     <p className="text-sm mt-1">You have clocked out from your current session.</p>
                     <p className="text-xs mt-2 text-green-600">Click "Start Camera" below to begin a new session.</p>
                 </div>
-            ) : (
-                <>
-                    {/* Camera/Photo View */}
-                    <div className="relative aspect-video bg-slate-900 rounded-md overflow-hidden flex items-center justify-center text-slate-400">
-                        {photo ? (
-                            <img src={photo} alt="Your selfie" className="w-full h-full object-cover" />
-                        ) : isCameraOn ? (
-                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]"></video>
-                        ) : (
-                             <div className="text-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                                <p>Camera is off</p>
-                            </div>
-                        )}
-
-                        {/* Timestamp and Location Overlay */}
-                        {(isCameraOn || photo) && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-2 backdrop-blur-sm">
-                                <p className="font-mono text-center tracking-wider">{currentTime.toLocaleString()}</p>
-                                {currentLocation ? (
-                                    <>
-                                        <p className="font-mono text-center">
-                                            {`Lat: ${currentLocation.latitude.toFixed(5)}, Lon: ${currentLocation.longitude.toFixed(5)}`}
-                                        </p>
-                                        {currentLocation.accuracy !== undefined && (
-                                            <p className={`text-center text-xs mt-1 ${currentLocation.accuracy <= 50 ? 'text-green-400' : currentLocation.accuracy <= 100 ? 'text-yellow-400' : 'text-orange-400'}`}>
-                                                Accuracy: ±{currentLocation.accuracy.toFixed(0)}m {currentLocation.accuracy <= 50 ? '(Excellent)' : currentLocation.accuracy <= 100 ? '(Good)' : '(Fair)'}
-                                            </p>
-                                        )}
-                                    </>
-                                ) : (
-                                    <p className="text-yellow-400 text-center">{locationError || 'Acquiring location...'}</p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="space-y-3">
-                        {!isCameraOn && !photo ? (
-                            <button onClick={startCamera} className="w-full bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition-colors font-semibold">
-                                Start Camera
-                            </button>
-                        ) : isCameraOn ? (
-                            <button onClick={capturePhoto} className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-semibold">
-                                Take Photo
-                            </button>
-                        ) : ( // Photo taken, show preview options
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={startCamera} className="w-full bg-slate-500 text-white px-4 py-3 rounded-md hover:bg-slate-600 transition-colors font-semibold">
-                                    Retake
-                                </button>
-                                <button 
-                                    onClick={handleClockAction} 
-                                    disabled={!currentLocation || loading}
-                                    className={`w-full text-white font-bold py-3 px-4 rounded-md transition-all duration-200 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed ${isClockedIn ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                                >
-                                    {loading ? 'Processing...' : (isClockedIn ? 'Confirm Clock Out' : 'Confirm Clock In')}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    {error && <p className="text-red-600 text-sm mt-2 text-center bg-red-50 p-2 rounded-md border border-red-200">{error}</p>}
-                </>
             )}
+
+            {/* Camera/Photo View */}
+            <div className="relative aspect-video bg-slate-900 rounded-md overflow-hidden flex items-center justify-center text-slate-400">
+                {photo ? (
+                    <img src={photo} alt="Your selfie" className="w-full h-full object-cover" />
+                ) : isCameraOn ? (
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]"></video>
+                ) : (
+                     <div className="text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <p>Camera is off</p>
+                    </div>
+                )}
+
+                {/* Timestamp and Location Overlay */}
+                {(isCameraOn || photo) && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-xs p-2 backdrop-blur-sm">
+                        <p className="font-mono text-center tracking-wider">{currentTime.toLocaleString()}</p>
+                        {currentLocation ? (
+                            <>
+                                <p className="font-mono text-center">
+                                    {`Lat: ${currentLocation.latitude.toFixed(5)}, Lon: ${currentLocation.longitude.toFixed(5)}`}
+                                </p>
+                                {currentLocation.accuracy !== undefined && (
+                                    <p className={`text-center text-xs mt-1 ${currentLocation.accuracy <= 50 ? 'text-green-400' : currentLocation.accuracy <= 100 ? 'text-yellow-400' : 'text-orange-400'}`}>
+                                        Accuracy: ±{currentLocation.accuracy.toFixed(0)}m {currentLocation.accuracy <= 50 ? '(Excellent)' : currentLocation.accuracy <= 100 ? '(Good)' : '(Fair)'}
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <p className="text-yellow-400 text-center">{locationError || 'Acquiring location...'}</p>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+                {!isCameraOn && !photo ? (
+                    <button onClick={startCamera} className="w-full bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition-colors font-semibold">
+                        Start Camera
+                    </button>
+                ) : isCameraOn ? (
+                    <button onClick={capturePhoto} className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors font-semibold">
+                        Take Photo
+                    </button>
+                ) : ( // Photo taken, show preview options
+                    <div className="grid grid-cols-2 gap-3">
+                        <button onClick={startCamera} className="w-full bg-slate-500 text-white px-4 py-3 rounded-md hover:bg-slate-600 transition-colors font-semibold">
+                            Retake
+                        </button>
+                        <button
+                            onClick={handleClockAction}
+                            disabled={!currentLocation || loading}
+                            className={`w-full text-white font-bold py-3 px-4 rounded-md transition-all duration-200 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed ${isClockedIn ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                        >
+                            {loading ? 'Processing...' : (isClockedIn ? 'Confirm Clock Out' : 'Confirm Clock In')}
+                        </button>
+                    </div>
+                )}
+            </div>
+            {error && <p className="text-red-600 text-sm mt-2 text-center bg-red-50 p-2 rounded-md border border-red-200">{error}</p>}
         </div>
     );
 };
