@@ -21,6 +21,7 @@ import {
     LeaveBalance,
     WorkSchedule,
     AuditLog,
+    EmployeeFile,
 } from '../types';
 
 // Store current session info
@@ -1902,6 +1903,108 @@ export const requestPasswordReminder = async (companyCode: string, email: string
             success: false,
             message: 'Failed to send password reminder. Please try again or contact your employer.'
         };
+    }
+};
+
+// Employee File Management Functions
+export const getEmployeeFiles = async (employeeId: string): Promise<EmployeeFile[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('employee_files')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .order('uploaded_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching employee files:', error);
+            return [];
+        }
+
+        return (data || []).map((file: any) => ({
+            id: file.id,
+            companyId: file.company_id,
+            employeeId: file.employee_id,
+            fileName: file.file_name,
+            fileType: file.file_type,
+            fileSize: parseInt(file.file_size),
+            fileData: file.file_data,
+            description: file.description,
+            uploadedBy: file.uploaded_by,
+            uploadedAt: file.uploaded_at,
+        }));
+    } catch (error) {
+        console.error('Error in getEmployeeFiles:', error);
+        return [];
+    }
+};
+
+export const uploadEmployeeFile = async (
+    employeeId: string,
+    fileName: string,
+    fileType: string,
+    fileSize: number,
+    fileData: string,
+    description: string | undefined,
+    uploadedBy: string
+): Promise<EmployeeFile | { error: string }> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            return { error: 'Company context not set' };
+        }
+
+        const { data, error } = await supabase
+            .from('employee_files')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: employeeId,
+                file_name: fileName,
+                file_type: fileType,
+                file_size: fileSize,
+                file_data: fileData,
+                description: description || null,
+                uploaded_by: uploadedBy,
+                uploaded_at: new Date().toISOString(),
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error uploading file:', error);
+            return { error: error.message || 'Failed to upload file' };
+        }
+
+        return {
+            id: data.id,
+            companyId: data.company_id,
+            employeeId: data.employee_id,
+            fileName: data.file_name,
+            fileType: data.file_type,
+            fileSize: parseInt(data.file_size),
+            fileData: data.file_data,
+            description: data.description,
+            uploadedBy: data.uploaded_by,
+            uploadedAt: data.uploaded_at,
+        };
+    } catch (error: any) {
+        console.error('Error in uploadEmployeeFile:', error);
+        return { error: error.message || 'Failed to upload file' };
+    }
+};
+
+export const deleteEmployeeFile = async (fileId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('employee_files')
+            .delete()
+            .eq('id', fileId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting employee file:', error);
+        throw error;
     }
 };
 

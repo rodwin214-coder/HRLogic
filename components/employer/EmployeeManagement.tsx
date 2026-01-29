@@ -7,6 +7,7 @@ import { UserContext } from '../../App';
 import EmployeeDetailsModal from './EmployeeDetailsModal';
 import AddEmployeeModal from './AddEmployeeModal';
 import BulkInviteModal from './BulkInviteModal';
+import EmployeeFilesModal from './EmployeeFilesModal';
 
 const BulkImportModal: React.FC<{onClose: () => void, onImport: () => void}> = ({ onClose, onImport }) => {
     const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -86,6 +87,7 @@ const EmployeeManagement: React.FC = () => {
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+    const [selectedEmployeeForFiles, setSelectedEmployeeForFiles] = useState<Employee | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
     const { user: editor } = useContext(UserContext);
@@ -289,6 +291,7 @@ const EmployeeManagement: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <button onClick={() => setSelectedEmployee(employee)} className="text-indigo-600 hover:text-indigo-900">Details</button>
+                                    <button onClick={() => setSelectedEmployeeForFiles(employee)} className="ml-4 text-blue-600 hover:text-blue-900">Files</button>
                                     {employee.status === EmployeeStatus.ACTIVE ? (
                                         <button onClick={() => handleStatusChange(employee, EmployeeStatus.TERMINATED)} className="ml-4 text-orange-600 hover:text-orange-900">Terminate</button>
                                     ) : (
@@ -333,6 +336,13 @@ const EmployeeManagement: React.FC = () => {
                     employeeId={selectedEmployee.id}
                     onClose={() => setSelectedEmployee(null)}
                     onUpdate={fetchData}
+                />
+            )}
+            {selectedEmployeeForFiles && editor && (
+                <EmployeeFilesModal
+                    employee={selectedEmployeeForFiles}
+                    currentUserId={editor.id}
+                    onClose={() => setSelectedEmployeeForFiles(null)}
                 />
             )}
         </div>

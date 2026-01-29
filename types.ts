@@ -234,3 +234,16 @@ export interface LeaveBalance {
         available: number;
     };
 }
+
+export interface EmployeeFile {
+    id: string;
+    companyId: string;
+    employeeId: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    fileData: string; // base64 encoded
+    description?: string;
+    uploadedBy: string;
+    uploadedAt: string;
+}
