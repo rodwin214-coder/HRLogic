@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { UserRole, Employee } from './types';
-import * as api from './services/mockApi';
+import * as api from './services/supabaseApi';
 import EmployeeDashboard from './components/employee/EmployeeDashboard';
 import EmployerDashboard from './components/employer/EmployerDashboard';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
@@ -11,19 +11,32 @@ import { WORKLOGIX_LOGO_BASE64 } from './services/mockApi';
 interface UserContextType {
     user: Employee | null;
     role: UserRole | null;
+    companyCode: string;
     logout: () => void;
     refreshUser: () => void;
 }
 
-export const UserContext = React.createContext<UserContextType>({ user: null, role: null, logout: () => {}, refreshUser: () => {} });
+export const UserContext = React.createContext<UserContextType>({
+    user: null,
+    role: null,
+    companyCode: '',
+    logout: () => {},
+    refreshUser: () => {}
+});
 
 const App: React.FC = () => {
-    const [currentUser, setCurrentUser] = useState<{ user: Employee | null; role: UserRole | null }>({ user: null, role: null });
+    const [currentUser, setCurrentUser] = useState<{ user: Employee | null; role: UserRole | null; companyCode: string }>({
+        user: null,
+        role: null,
+        companyCode: ''
+    });
     const [isRegistering, setIsRegistering] = useState(false);
     const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    
+
     // Form state
+    const [companyCode, setCompanyCode] = useState('');
+    const [companyName, setCompanyName] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
@@ -31,90 +44,111 @@ const App: React.FC = () => {
     const [apiError, setApiError] = useState('');
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    useEffect(() => {
-        // On first run, create default accounts if none exist.
-        const accounts = api.getUserAccounts();
-        if (accounts.length === 0) {
-            // Create default employer
-            api.registerEmployer('Admin', 'User', 'admin@work.com', 'password123');
-            // Create default employee for testing
-            api.inviteEmployee({
-                firstName: 'John',
-                lastName: 'Doe',
-                email: 'employee@work.com',
-                department: 'Engineering',
-            });
-        }
-    }, []); // Runs once on mount
-
     // Check for a logged-in user in localStorage on initial load
     useEffect(() => {
         const loggedInUserId = localStorage.getItem('loggedInUserId');
-        if (loggedInUserId) {
-            const accounts = api.getUserAccounts();
-            const userAccount = accounts.find(acc => acc.employeeId === loggedInUserId);
-            if (userAccount) {
-                const userProfile = api.getEmployeeById(userAccount.employeeId);
-                if (userProfile) {
-                    setCurrentUser({ user: userProfile, role: userAccount.role });
-                }
-            }
-        }
-        setIsLoading(false);
-    }, []);
+        const loggedInCompanyCode = localStorage.getItem('loggedInCompanyCode');
+        const loggedInEmail = localStorage.getItem('loggedInEmail');
 
+        if (loggedInUserId && loggedInCompanyCode && loggedInEmail) {
+            // Auto-login with stored credentials
+            api.setCurrentUserEmail(loggedInEmail).then(() => {
+                return api.getEmployeeById(loggedInUserId);
+            }).then(userProfile => {
+                if (userProfile) {
+                    return api.getUserAccountByEmployeeId(loggedInUserId).then(account => {
+                        if (account) {
+                            setCurrentUser({ user: userProfile, role: account.role, companyCode: loggedInCompanyCode });
+                            setCompanyCode(loggedInCompanyCode);
+                        }
+                        setIsLoading(false);
+                    });
+                } else {
+                    setIsLoading(false);
+                }
+            }).catch((err) => {
+                console.error('Auto-login error:', err);
+                setIsLoading(false);
+            });
+        } else {
+            setIsLoading(false);
+        }
+    }, []);
 
     const validate = useCallback(() => {
         const newErrors: { [key: string]: string } = {};
+        if (!companyCode.trim()) {
+            newErrors.companyCode = isRegistering ? 'Company Code is required (will be created).' : 'Company Code is required.';
+        } else if (!/^[a-z0-9_-]+$/.test(companyCode)) {
+            newErrors.companyCode = 'Company Code can only contain lowercase letters, numbers, hyphens, and underscores.';
+        }
         if (isRegistering) {
+            if (!companyName.trim()) newErrors.companyName = 'Company Name is required.';
             if (!firstName.trim()) newErrors.firstName = 'First Name is required.';
             if (!lastName.trim()) newErrors.lastName = 'Last Name is required.';
         }
         if (!email.trim()) newErrors.email = 'Email Address is required.';
         else if (!/^\S+@\S+\.\S+$/.test(email)) newErrors.email = 'Email address is invalid.';
         if (!password) newErrors.password = 'Password is required.';
-        
+        else if (password.length < 8) newErrors.password = 'Password must be at least 8 characters.';
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    }, [firstName, lastName, email, password, isRegistering]);
+    }, [companyCode, companyName, firstName, lastName, email, password, isRegistering]);
 
     useEffect(() => {
         if (!currentUser.user) { // Only validate when login form is visible
              validate();
         }
-    }, [firstName, lastName, email, password, isRegistering, validate, currentUser]);
+    }, [companyCode, companyName, firstName, lastName, email, password, isRegistering, validate, currentUser]);
 
     const handleLogin = useCallback(async () => {
         setApiError('');
         if (!validate()) return;
-        
-        const result = api.loginUser(email, password);
-        if ('error' in result) {
-            setApiError(result.error);
-        } else {
-            setCurrentUser({ user: result.user, role: result.role });
-            localStorage.setItem('loggedInUserId', result.user.id);
+
+        try {
+            const result = await api.loginUser(companyCode, email, password);
+            if ('error' in result) {
+                setApiError(result.error);
+            } else {
+                setCurrentUser({ user: result.user, role: result.role, companyCode });
+                localStorage.setItem('loggedInUserId', result.user.id);
+                localStorage.setItem('loggedInCompanyCode', companyCode);
+                localStorage.setItem('loggedInEmail', email);
+            }
+        } catch (err: any) {
+            setApiError(err.message || 'Login failed. Please try again.');
         }
-    }, [email, password, validate]);
+    }, [companyCode, email, password, validate]);
 
     const handleRegister = useCallback(async () => {
         setApiError('');
         if (!validate()) return;
 
-        const result = api.registerEmployer(firstName, lastName, email, password);
-        if ('error' in result) {
-            setApiError(result.error);
-        } else {
-            // Auto-login after registration
-            setCurrentUser({ user: result.user, role: result.role });
-            localStorage.setItem('loggedInUserId', result.user.id);
+        try {
+            const result = await api.registerEmployer(companyCode, companyName, firstName, lastName, email, password);
+            if ('error' in result) {
+                setApiError(result.error);
+            } else {
+                // Auto-login after registration
+                setCurrentUser({ user: result.user, role: result.role, companyCode });
+                localStorage.setItem('loggedInUserId', result.user.id);
+                localStorage.setItem('loggedInCompanyCode', companyCode);
+                localStorage.setItem('loggedInEmail', email);
+            }
+        } catch (err: any) {
+            setApiError(err.message || 'Registration failed. Please try again.');
         }
-    }, [firstName, lastName, email, password, validate]);
-    
+    }, [companyCode, companyName, firstName, lastName, email, password, validate]);
+
     const handleLogout = useCallback(() => {
-        setCurrentUser({ user: null, role: null });
+        setCurrentUser({ user: null, role: null, companyCode: '' });
         localStorage.removeItem('loggedInUserId');
+        localStorage.removeItem('loggedInCompanyCode');
+        localStorage.removeItem('loggedInEmail');
         // Clear form fields on logout
+        setCompanyCode('');
+        setCompanyName('');
         setEmail('');
         setPassword('');
         setFirstName('');
@@ -124,19 +158,27 @@ const App: React.FC = () => {
         setIsRegistering(false);
     }, []);
 
-    const refreshUser = useCallback(() => {
+    const refreshUser = useCallback(async () => {
         if (currentUser.user) {
-            const refreshedUser = api.getEmployeeById(currentUser.user.id);
-            if (refreshedUser) {
-                setCurrentUser(prev => ({ ...prev, user: refreshedUser }));
-            } else {
-                handleLogout(); // User was deleted or not found
+            try {
+                const refreshedUser = await api.getEmployeeById(currentUser.user.id);
+                if (refreshedUser) {
+                    setCurrentUser(prev => ({ ...prev, user: refreshedUser }));
+                } else {
+                    handleLogout(); // User was deleted or not found
+                }
+            } catch (err) {
+                handleLogout();
             }
         }
     }, [currentUser.user, handleLogout]);
 
-    const userContextValue = useMemo(() => ({ ...currentUser, logout: handleLogout, refreshUser }), [currentUser, handleLogout, refreshUser]);
-    
+    const userContextValue = useMemo(() => ({
+        ...currentUser,
+        logout: handleLogout,
+        refreshUser
+    }), [currentUser, handleLogout, refreshUser]);
+
     const isFormValid = Object.keys(errors).length === 0;
 
     if (isLoading) {
@@ -153,23 +195,53 @@ const App: React.FC = () => {
                             <div className="flex flex-col items-center justify-center mb-6">
                                 <img src={WORKLOGIX_LOGO_BASE64} alt="WorkLogix Logo" className="h-24 w-auto mb-2" />
                             </div>
-                            
-                            <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new Employer account' : 'Sign in to your account'}</p>
-                            
+
+                            <p className="text-slate-500 mb-6 text-center">{isRegistering ? 'Create a new company account' : 'Sign in to your account'}</p>
+
                             <form onSubmit={(e) => { e.preventDefault(); isRegistering ? handleRegister() : handleLogin(); }} className="space-y-4">
+                                <div>
+                                    <label htmlFor="companyCode" className="block text-sm font-medium text-slate-700">
+                                        Company Code {isRegistering && <span className="text-xs text-slate-500">(choose a unique code)</span>}
+                                    </label>
+                                    <input
+                                        id="companyCode"
+                                        type="text"
+                                        value={companyCode}
+                                        onChange={(e) => setCompanyCode(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                                        required
+                                        placeholder={isRegistering ? "e.g., acme-corp" : "Enter your company code"}
+                                        className={`mt-1 input-field ${errors.companyCode ? 'invalid' : ''}`}
+                                    />
+                                    {errors.companyCode && <p className="text-xs text-red-600 mt-1">{errors.companyCode}</p>}
+                                </div>
                                 {isRegistering && (
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <>
                                         <div>
-                                            <label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label>
-                                            <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={`mt-1 input-field ${errors.firstName ? 'invalid' : ''}`}/>
-                                            {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
+                                            <label htmlFor="companyName" className="block text-sm font-medium text-slate-700">Company Name</label>
+                                            <input
+                                                id="companyName"
+                                                type="text"
+                                                value={companyName}
+                                                onChange={(e) => setCompanyName(e.target.value)}
+                                                required
+                                                placeholder="Your Company Name"
+                                                className={`mt-1 input-field ${errors.companyName ? 'invalid' : ''}`}
+                                            />
+                                            {errors.companyName && <p className="text-xs text-red-600 mt-1">{errors.companyName}</p>}
                                         </div>
-                                        <div>
-                                            <label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label>
-                                            <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className={`mt-1 input-field ${errors.lastName ? 'invalid' : ''}`}/>
-                                            {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label htmlFor="firstName" className="block text-sm font-medium text-slate-700">First Name</label>
+                                                <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className={`mt-1 input-field ${errors.firstName ? 'invalid' : ''}`}/>
+                                                {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
+                                            </div>
+                                            <div>
+                                                <label htmlFor="lastName" className="block text-sm font-medium text-slate-700">Last Name</label>
+                                                <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className={`mt-1 input-field ${errors.lastName ? 'invalid' : ''}`}/>
+                                                {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
+                                            </div>
                                         </div>
-                                    </div>
+                                    </>
                                 )}
                                 <div>
                                     <label htmlFor="email" className="block text-sm font-medium text-slate-700">Email Address</label>
@@ -186,19 +258,19 @@ const App: React.FC = () => {
                                     <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className={`mt-1 input-field ${errors.password ? 'invalid' : ''}`}/>
                                     {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
                                 </div>
-                                
+
                                 {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
 
                                 <button type="submit" disabled={!isFormValid} className="w-full btn btn-primary mt-2">
-                                    {isRegistering ? 'Create Employer Account' : 'Login'}
+                                    {isRegistering ? 'Create Company Account' : 'Login'}
                                 </button>
                             </form>
 
                             <div className="mt-6 text-sm text-slate-500 text-center">
                                 <p>
-                                    {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+                                    {isRegistering ? 'Already have an account?' : "Don't have a company account?"}
                                     <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-[rgb(var(--color-primary))] hover:opacity-80 ml-1">
-                                        {isRegistering ? 'Log In' : 'Sign Up'}
+                                        {isRegistering ? 'Log In' : 'Create Company'}
                                     </button>
                                 </p>
                             </div>
