@@ -13,11 +13,14 @@ const CustomFieldsSetup: React.FC = () => {
     
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    const fetchData = useCallback(() => {
-        setDefinitions(api.getCustomFieldDefinitions());
+    const fetchData = useCallback(async () => {
+        const defsData = await api.getCustomFieldDefinitions();
+        setDefinitions(defsData);
     }, []);
 
-    useEffect(fetchData, [fetchData]);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const validate = useCallback(() => {
         const newErrors: { [key: string]: string } = {};

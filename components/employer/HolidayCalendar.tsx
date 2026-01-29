@@ -58,10 +58,15 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({ canAddHoliday = false
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [holidayTypeFilter, setHolidayTypeFilter] = useState<'All' | 'Regular' | 'Special'>('All');
 
-    const fetchData = useCallback(() => {
-        setHolidays(api.getHolidays());
-        setApprovedLeaves(api.getRequests().filter(r => r.status === RequestStatus.APPROVED && r.type === RequestType.LEAVE) as LeaveRequest[]);
-        setEmployees(api.getEmployees());
+    const fetchData = useCallback(async () => {
+        const [holidaysData, requestsData, employeesData] = await Promise.all([
+            api.getHolidays(),
+            api.getRequests(),
+            api.getEmployees()
+        ]);
+        setHolidays(holidaysData);
+        setApprovedLeaves(requestsData.filter(r => r.status === RequestStatus.APPROVED && r.type === RequestType.LEAVE) as LeaveRequest[]);
+        setEmployees(employeesData);
     }, []);
 
     useEffect(() => {

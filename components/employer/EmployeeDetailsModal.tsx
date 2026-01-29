@@ -40,7 +40,11 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
     }, [employee]);
 
     useEffect(() => {
-        setCustomFieldDefs(api.getCustomFieldDefinitions());
+        const loadCustomFields = async () => {
+            const fields = await api.getCustomFieldDefinitions();
+            setCustomFieldDefs(fields);
+        };
+        loadCustomFields();
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -330,11 +334,14 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
 const TasksTab: React.FC<{ employee: Employee }> = ({ employee }) => {
     const [tasks, setTasks] = useState<Task[]>([]);
     
-    const fetchTasks = useCallback(() => {
-        setTasks(api.getTasksForEmployee(employee.id));
+    const fetchTasks = useCallback(async () => {
+        const tasksData = await api.getTasksForEmployee(employee.id);
+        setTasks(tasksData);
     }, [employee.id]);
 
-    useEffect(fetchTasks, [fetchTasks]);
+    useEffect(() => {
+        fetchTasks();
+    }, [fetchTasks]);
 
      const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
         const updatedTask = { ...task, status: newStatus };
@@ -397,8 +404,9 @@ const LeaveBalanceTab: React.FC<{ employee: Employee, onUpdate: () => void }> = 
     const [balance, setBalance] = useState<LeaveBalance | null>(null);
     const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
 
-    const calculate = useCallback(() => {
-        setBalance(api.calculateLeaveBalance(employee.id));
+    const calculate = useCallback(async () => {
+        const balanceData = await api.calculateLeaveBalance(employee.id);
+        setBalance(balanceData);
     }, [employee.id]);
 
     useEffect(() => {
@@ -472,8 +480,15 @@ const AuditLogTab: React.FC<{ employeeId: string }> = ({ employeeId }) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
 
     useEffect(() => {
-        setLogs(api.getAuditLogsForEmployee(employeeId));
-        setEmployees(api.getEmployees()); // To get editor names
+        const loadData = async () => {
+            const [logsData, employeesData] = await Promise.all([
+                api.getAuditLogsForEmployee(employeeId),
+                api.getEmployees()
+            ]);
+            setLogs(logsData);
+            setEmployees(employeesData);
+        };
+        loadData();
     }, [employeeId]);
     
     const getEditorName = (editorId: string) => {
@@ -518,12 +533,14 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employeeId,
     const [employee, setEmployee] = useState<Employee | null>(null);
     const [activeTab, setActiveTab] = useState<DetailTab>('profile');
 
-    const fetchEmployee = useCallback(() => {
-        const data = api.getEmployeeById(employeeId);
+    const fetchEmployee = useCallback(async () => {
+        const data = await api.getEmployeeById(employeeId);
         if (data) setEmployee(data);
     }, [employeeId]);
 
-    useEffect(fetchEmployee, [fetchEmployee]);
+    useEffect(() => {
+        fetchEmployee();
+    }, [fetchEmployee]);
     
     const TabButton: React.FC<{tabId: DetailTab; children: React.ReactNode}> = ({ tabId, children }) => {
         return (

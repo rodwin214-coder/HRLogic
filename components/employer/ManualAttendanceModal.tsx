@@ -30,7 +30,11 @@ const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({ onClose, 
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
     useEffect(() => {
-        setEmployees(api.getEmployees());
+        const loadEmployees = async () => {
+            const employeesData = await api.getEmployees();
+            setEmployees(employeesData);
+        };
+        loadEmployees();
     }, []);
 
     const validate = useCallback(() => {

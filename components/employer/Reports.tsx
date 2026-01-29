@@ -49,13 +49,21 @@ export const Reports: React.FC = () => {
     const [startDate, setStartDate] = useState(firstDayOfMonth);
     const [endDate, setEndDate] = useState(lastDayOfMonth);
 
-    const fetchData = useCallback(() => {
-        setAttendance(api.getAttendance());
-        setEmployees(api.getEmployees());
-        setShifts(api.getShifts());
-        setRequests(api.getRequests());
-        setHolidays(api.getHolidays());
-        setCompanyProfile(api.getCompanyProfile());
+    const fetchData = useCallback(async () => {
+        const [attendanceData, employeesData, shiftsData, requestsData, holidaysData, profileData] = await Promise.all([
+            api.getAttendance(),
+            api.getEmployees(),
+            api.getShifts(),
+            api.getRequests(),
+            api.getHolidays(),
+            api.getCompanyProfile()
+        ]);
+        setAttendance(attendanceData);
+        setEmployees(employeesData);
+        setShifts(shiftsData);
+        setRequests(requestsData);
+        setHolidays(holidaysData);
+        setCompanyProfile(profileData);
     }, []);
 
     useEffect(() => {

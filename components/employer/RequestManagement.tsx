@@ -55,9 +55,13 @@ const RequestManagement: React.FC = () => {
     const [filter, setFilter] = useState<RequestFilter>(RequestStatus.PENDING);
     const { user: editor } = useContext(UserContext);
 
-    const fetchData = useCallback(() => {
-        setRequests(api.getRequests().sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
-        setEmployees(api.getEmployees());
+    const fetchData = useCallback(async () => {
+        const [requestsData, employeesData] = await Promise.all([
+            api.getRequests(),
+            api.getEmployees()
+        ]);
+        setRequests(requestsData.sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
+        setEmployees(employeesData);
     }, []);
 
     useEffect(() => {

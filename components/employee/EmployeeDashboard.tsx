@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/supabaseApi';
-import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, Task, TaskStatus, Employee, CompanyProfile } from '../../types';
+import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, EmployeeStatus, Task, TaskStatus, Employee, CompanyProfile } from '../../types';
 import ClockInOut from './ClockInOut';
 import Modal from '../common/Modal';
 import HolidayCalendar from '../employer/HolidayCalendar';

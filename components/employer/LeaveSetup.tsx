@@ -35,9 +35,12 @@ const LeaveSetup: React.FC = () => {
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
     useEffect(() => {
-        const fetchedPolicy = api.getLeavePolicy();
-        setPolicy(fetchedPolicy);
-        setIsLoading(false);
+        const loadPolicy = async () => {
+            const fetchedPolicy = await api.getLeavePolicy();
+            setPolicy(fetchedPolicy || null);
+            setIsLoading(false);
+        };
+        loadPolicy();
     }, []);
     
     const validate = useCallback(() => {

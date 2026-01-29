@@ -21,9 +21,13 @@ const EmployerDashboard: React.FC = () => {
     const [pendingRequestCount, setPendingRequestCount] = useState(0);
     const { user, logout } = useContext(UserContext);
 
-    const fetchData = useCallback(() => {
-        setCompanyProfile(api.getCompanyProfile());
-        const pendingCount = api.getRequests().filter(r => r.status === RequestStatus.PENDING).length;
+    const fetchData = useCallback(async () => {
+        const [profile, requests] = await Promise.all([
+            api.getCompanyProfile(),
+            api.getRequests()
+        ]);
+        setCompanyProfile(profile);
+        const pendingCount = requests.filter(r => r.status === RequestStatus.PENDING).length;
         setPendingRequestCount(pendingCount);
     }, []);
 

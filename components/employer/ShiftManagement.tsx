@@ -12,8 +12,9 @@ const ShiftManagement: React.FC = () => {
     const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
     const [isFormValid, setIsFormValid] = useState(false);
 
-    const fetchData = useCallback(() => {
-        setShifts(api.getShifts());
+    const fetchData = useCallback(async () => {
+        const shiftsData = await api.getShifts();
+        setShifts(shiftsData);
     }, []);
 
     useEffect(() => {
