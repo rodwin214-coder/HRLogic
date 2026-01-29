@@ -306,6 +306,7 @@ const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> =
 // Employee Functions
 export const getEmployeeById = async (id: string): Promise<Employee | undefined> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('employees')
             .select('*')
@@ -322,6 +323,7 @@ export const getEmployeeById = async (id: string): Promise<Employee | undefined>
 
 export const getUserAccountByEmployeeId = async (employeeId: string): Promise<UserAccount | undefined> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('user_accounts')
             .select('*')
@@ -365,6 +367,7 @@ export const inviteEmployee = async (employeeData: {
     department: string;
 }): Promise<Employee | { error: string }> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) {
             return { error: 'Company not found. Please log in again.' };
         }
@@ -431,6 +434,7 @@ export const inviteEmployee = async (employeeData: {
 
 export const updateEmployee = async (updatedEmployee: Employee, editorId: string): Promise<Employee> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) {
             throw new Error('Company not found. Please log in again.');
         }
@@ -533,6 +537,7 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
 
 export const deleteEmployee = async (employeeId: string): Promise<void> => {
     try {
+        await ensureUserContext();
         // Delete user account first (due to foreign key constraint)
         await supabase
             .from('user_accounts')
@@ -697,6 +702,7 @@ export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
 
 export const updateCompanyProfile = async (profile: CompanyProfile): Promise<CompanyProfile | null> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) return null;
 
         const { data, error } = await supabase
@@ -742,6 +748,7 @@ export const clearAllData = (): void => {
 // These should be implemented based on your needs
 export const getShifts = async (): Promise<Shift[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('shifts')
             .select('*');
@@ -761,6 +768,7 @@ export const getShifts = async (): Promise<Shift[]> => {
 
 export const getHolidays = async (): Promise<Holiday[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('holidays')
             .select('*')
@@ -923,6 +931,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
 };
 
 export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: string): Promise<AttendanceRecord> => {
+    await ensureUserContext();
     // Check if already clocked in today
     const today = new Date().toISOString().split('T')[0];
     const { data: existingRecord } = await supabase
@@ -974,6 +983,7 @@ export const clockOut = async (
     }
 ): Promise<AttendanceRecord | undefined> => {
     try {
+        await ensureUserContext();
         const today = new Date().toISOString().split('T')[0];
         const { data: record, error: fetchError } = await supabase
             .from('attendance_records')
@@ -1019,6 +1029,7 @@ export const clockOut = async (
 // Leave balance calculation
 export const calculateLeaveBalance = async (employeeId: string): Promise<LeaveBalance> => {
     try {
+        await ensureUserContext();
         const employee = await getEmployeeById(employeeId);
         if (!employee) {
             return {
@@ -1113,6 +1124,7 @@ export const getTasks = (): Task[] => {
 
 export const getTasksForEmployee = async (employeeId: string): Promise<Task[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('tasks')
             .select('*')
@@ -1138,6 +1150,7 @@ export const getTasksForEmployee = async (employeeId: string): Promise<Task[]> =
 
 export const updateTask = async (task: Task): Promise<Task> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('tasks')
             .update({
@@ -1170,6 +1183,7 @@ export const updateTask = async (task: Task): Promise<Task> => {
 
 export const addTask = async (taskData: Omit<Task, 'id'>): Promise<Task> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) {
             throw new Error('Company context not set');
         }
