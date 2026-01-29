@@ -925,6 +925,35 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
     try {
         await ensureUserContext();
         const today = new Date().toISOString().split('T')[0];
+
+        // First, try to get an active session (not clocked out yet)
+        const { data: activeSession } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .gte('clock_in_time', `${today}T00:00:00Z`)
+            .lte('clock_in_time', `${today}T23:59:59Z`)
+            .is('clock_out_time', null)
+            .order('clock_in_time', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (activeSession) {
+            return {
+                id: activeSession.id,
+                employeeId: activeSession.employee_id,
+                clockInTime: activeSession.clock_in_time,
+                clockInPhoto: activeSession.clock_in_photo,
+                clockInLocation: activeSession.clock_in_location,
+                clockOutTime: activeSession.clock_out_time,
+                clockOutPhoto: activeSession.clock_out_photo,
+                clockOutLocation: activeSession.clock_out_location,
+                endOfDayNotes: activeSession.end_of_day_notes,
+                manualEntryReason: activeSession.manual_entry_reason,
+            };
+        }
+
+        // If no active session, get the most recent completed session
         const { data, error } = await supabase
             .from('attendance_records')
             .select('*')
@@ -960,20 +989,57 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
     }
 };
 
+export const getTodaysAllAttendance = async (employeeId: string): Promise<AttendanceRecord[]> => {
+    try {
+        await ensureUserContext();
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data, error } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .gte('clock_in_time', `${today}T00:00:00Z`)
+            .lte('clock_in_time', `${today}T23:59:59Z`)
+            .order('clock_in_time', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching all today\'s attendance:', error);
+            return [];
+        }
+
+        return (data || []).map((record: any) => ({
+            id: record.id,
+            employeeId: record.employee_id,
+            clockInTime: record.clock_in_time,
+            clockInPhoto: record.clock_in_photo,
+            clockInLocation: record.clock_in_location,
+            clockOutTime: record.clock_out_time,
+            clockOutPhoto: record.clock_out_photo,
+            clockOutLocation: record.clock_out_location,
+            endOfDayNotes: record.end_of_day_notes,
+            manualEntryReason: record.manual_entry_reason,
+        }));
+    } catch (error) {
+        console.error('Error fetching all today\'s attendance:', error);
+        return [];
+    }
+};
+
 export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: string): Promise<AttendanceRecord> => {
     await ensureUserContext();
-    // Check if already clocked in today
+    // Check if there's an active session (clocked in but not clocked out)
     const today = new Date().toISOString().split('T')[0];
-    const { data: existingRecord } = await supabase
+    const { data: activeSession } = await supabase
         .from('attendance_records')
         .select('id')
         .eq('employee_id', record.employeeId)
         .gte('clock_in_time', `${today}T00:00:00Z`)
         .lte('clock_in_time', `${today}T23:59:59Z`)
+        .is('clock_out_time', null)
         .maybeSingle();
 
-    if (existingRecord) {
-        throw new Error('You have already clocked in today.');
+    if (activeSession) {
+        throw new Error('You have an active session. Please clock out before starting a new session.');
     }
 
     const { data, error } = await supabase

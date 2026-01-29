@@ -125,6 +125,7 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [allTodaysSessions, setAllTodaysSessions] = useState<AttendanceRecord[]>([]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -137,6 +138,17 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    // Load all today's sessions
+    useEffect(() => {
+        const loadAllSessions = async () => {
+            if (user) {
+                const sessions = await api.getTodaysAllAttendance(user.id);
+                setAllTodaysSessions(sessions);
+            }
+        };
+        loadAllSessions();
+    }, [user, todaysRecord]);
 
     // Camera cleanup function
     const cleanupCamera = useCallback(() => {
@@ -296,8 +308,8 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
         }
     };
 
-    const statusText = isClockedOut ? 'Completed for the day' : isClockedIn ? 'Clocked In' : 'Ready to Clock In';
-    const statusColor = isClockedOut ? 'bg-green-100 text-green-800' : isClockedIn ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
+    const statusText = isClockedIn ? 'Clocked In' : 'Ready to Clock In';
+    const statusColor = isClockedIn ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800';
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
@@ -309,32 +321,82 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
 
             <h2 className="text-xl font-bold text-slate-800">Time Clock</h2>
 
-            {/* Attendance Summary */}
+            {/* Current Status */}
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex justify-between items-center mb-3">
-                    <span className="font-semibold text-slate-700">Status</span>
+                <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-700">Current Status</span>
                     <span className={`px-2 py-1 text-xs font-bold rounded-full ${statusColor}`}>{statusText}</span>
-                </div>
-                <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                        <span className="text-slate-600 font-medium">Clock In:</span>
-                        <span className="text-slate-800 font-mono">{formatTime(todaysRecord?.clockInTime)}</span>
-                    </div>
-                     <div className="flex justify-between items-center">
-                        <span className="text-slate-600 font-medium">Clock Out:</span>
-                        <span className="text-slate-800 font-mono">{formatTime(todaysRecord?.clockOutTime)}</span>
-                    </div>
-                    <div className="flex justify-between pt-2 border-t mt-2">
-                        <span className="text-slate-600 font-bold">Total Hours:</span>
-                        <span className="text-slate-800 font-bold">{calculateTotalHours(todaysRecord?.clockInTime, todaysRecord?.clockOutTime)}</span>
-                    </div>
                 </div>
             </div>
 
+            {/* All Sessions for Today */}
+            {allTodaysSessions.length > 0 && (
+                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h3 className="font-semibold text-slate-700 mb-3">
+                        Today's Sessions ({allTodaysSessions.length})
+                    </h3>
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {allTodaysSessions.map((session, index) => {
+                            const isActiveSession = session.id === todaysRecord?.id && !session.clockOutTime;
+                            return (
+                                <div
+                                    key={session.id}
+                                    className={`p-3 rounded-md border ${isActiveSession ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200'}`}
+                                >
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-semibold text-slate-500">Session {index + 1}</span>
+                                        {isActiveSession && (
+                                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
+                                                Active
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600">Clock In:</span>
+                                            <span className="text-slate-800 font-mono">{formatTime(session.clockInTime)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-600">Clock Out:</span>
+                                            <span className="text-slate-800 font-mono">{formatTime(session.clockOutTime)}</span>
+                                        </div>
+                                        <div className="flex justify-between pt-1 border-t">
+                                            <span className="text-slate-600 font-semibold">Duration:</span>
+                                            <span className="text-slate-800 font-bold">{calculateTotalHours(session.clockInTime, session.clockOutTime)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-300">
+                        <div className="flex justify-between">
+                            <span className="text-slate-700 font-bold">Total Hours Today:</span>
+                            <span className="text-slate-800 font-bold">
+                                {(() => {
+                                    let totalSeconds = 0;
+                                    allTodaysSessions.forEach(session => {
+                                        if (session.clockOutTime) {
+                                            const start = new Date(session.clockInTime).getTime();
+                                            const end = new Date(session.clockOutTime).getTime();
+                                            totalSeconds += (end - start) / 1000;
+                                        }
+                                    });
+                                    const hours = Math.floor(totalSeconds / 3600);
+                                    const minutes = Math.floor((totalSeconds % 3600) / 60);
+                                    return `${hours}h ${minutes}m`;
+                                })()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isClockedOut ? (
                  <div className="text-center p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">
-                    <p className="font-semibold">Great work today!</p>
-                    <p className="text-sm">You have completed your time for the day.</p>
+                    <p className="font-semibold">Session Completed</p>
+                    <p className="text-sm mt-1">You have clocked out from your current session.</p>
+                    <p className="text-xs mt-2 text-green-600">Click "Start Camera" below to begin a new session.</p>
                 </div>
             ) : (
                 <>
