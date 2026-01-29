@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { AttendanceRecord, AppRequest, RequestType, RequestStatus, Holiday, Shift } from '../../types';
 import { UserContext } from '../../App';
 
@@ -27,11 +27,20 @@ const EmployeeReport: React.FC = () => {
     const [endDate, setEndDate] = useState(lastDayOfMonth);
 
     useEffect(() => {
-        if (user) {
-            setAttendance(api.getAttendance().filter(r => r.employeeId === user.id));
-            setRequests(api.getRequests().filter(r => r.employeeId === user.id));
-        }
-        setHolidays(api.getHolidays());
+        const loadData = async () => {
+            if (user) {
+                const [attendanceData, requestsData, holidaysData] = await Promise.all([
+                    api.getAttendance(),
+                    api.getRequests(),
+                    api.getHolidays()
+                ]);
+
+                setAttendance(attendanceData.filter(r => r.employeeId === user.id));
+                setRequests(requestsData.filter(r => r.employeeId === user.id));
+                setHolidays(holidaysData);
+            }
+        };
+        loadData();
     }, [user]);
 
     const calculateTotalHours = (record: AttendanceRecord): string => {
