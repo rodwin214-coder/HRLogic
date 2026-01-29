@@ -133,18 +133,42 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
     const isClockedIn = !!todaysRecord && !todaysRecord.clockOutTime;
     const isClockedOut = !!todaysRecord?.clockOutTime;
 
-    // Live clock timer
+    // Live clock timer and midnight reset detection
     useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        let lastDate = new Date().toDateString();
+
+        const timer = setInterval(() => {
+            const now = new Date();
+            setCurrentTime(now);
+
+            // Check if date has changed (midnight passed)
+            const currentDate = now.toDateString();
+            if (currentDate !== lastDate) {
+                lastDate = currentDate;
+                // Date changed - trigger refresh to clear old sessions
+                onUpdate();
+                setAllTodaysSessions([]);
+                setPhoto(null);
+                setCurrentLocation(null);
+                setIsCameraOn(false);
+            }
+        }, 1000);
+
         return () => clearInterval(timer);
-    }, []);
+    }, [onUpdate]);
 
     // Load all today's sessions
     useEffect(() => {
         const loadAllSessions = async () => {
             if (user) {
                 const sessions = await api.getTodaysAllAttendance(user.id);
-                setAllTodaysSessions(sessions);
+                // Double-check that all sessions are from today (in case of timezone issues)
+                const today = new Date().toDateString();
+                const filteredSessions = sessions.filter(session => {
+                    const sessionDate = new Date(session.clockInTime).toDateString();
+                    return sessionDate === today;
+                });
+                setAllTodaysSessions(filteredSessions);
             }
         };
         loadAllSessions();
