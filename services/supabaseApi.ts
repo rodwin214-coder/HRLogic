@@ -53,6 +53,35 @@ const ensureUserContext = async () => {
     }
 };
 
+const generateNextEmployeeId = async (companyId: string): Promise<string> => {
+    const { data: employees, error } = await supabase
+        .from('employees')
+        .select('employee_id')
+        .eq('company_id', companyId);
+
+    if (error) {
+        console.error('Error fetching employees for ID generation:', error);
+        return 'EMP-00001';
+    }
+
+    if (!employees || employees.length === 0) {
+        return 'EMP-00001';
+    }
+
+    const empIds = employees
+        .map(emp => emp.employee_id)
+        .filter(id => id && id.startsWith('EMP-'))
+        .map(id => {
+            const numPart = id.replace('EMP-', '');
+            return parseInt(numPart, 10);
+        })
+        .filter(num => !isNaN(num));
+
+    const maxId = empIds.length > 0 ? Math.max(...empIds) : 0;
+    const nextId = maxId + 1;
+    return `EMP-${String(nextId).padStart(5, '0')}`;
+};
+
 export const setCurrentCompanyId = (companyId: string) => {
     currentCompanyId = companyId;
 };
@@ -138,12 +167,15 @@ export const registerEmployer = async (
         // Get the default shift
         const defaultShift = shifts && shifts.length > 0 ? shifts[0] : null;
 
+        // Generate employee ID
+        const employeeId = await generateNextEmployeeId(newCompany.id);
+
         // Create employee record for the employer
         const { data: newEmployee, error: employeeError } = await supabase
             .from('employees')
             .insert([{
                 company_id: newCompany.id,
-                employee_id: 'EMP-001',
+                employee_id: employeeId,
                 email,
                 first_name: firstName,
                 last_name: lastName,
@@ -385,8 +417,8 @@ export const inviteEmployee = async (employeeData: {
             return { error: 'An employee with this email already exists in your company.' };
         }
 
-        // Generate employee ID (e.g., "emp" + timestamp)
-        const generatedEmployeeId = `emp${Date.now()}`;
+        // Generate sequential employee ID
+        const generatedEmployeeId = await generateNextEmployeeId(currentCompanyId);
 
         // Hash default password
         const defaultPassword = 'qwerty123';
