@@ -39,6 +39,10 @@ export const setCurrentUserEmail = async (email: string) => {
     }
 };
 
+export const setCurrentCompanyId = (companyId: string) => {
+    currentCompanyId = companyId;
+};
+
 // Helper to get company by code
 const getCompanyByCode = async (companyCode: string): Promise<any | null> => {
     const { data, error } = await supabase
@@ -49,6 +53,21 @@ const getCompanyByCode = async (companyCode: string): Promise<any | null> => {
 
     if (error) throw error;
     return data;
+};
+
+// Public function to initialize company context by company code
+export const initializeCompanyContext = async (companyCode: string): Promise<boolean> => {
+    try {
+        const company = await getCompanyByCode(companyCode);
+        if (company) {
+            currentCompanyId = company.id;
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error initializing company context:', error);
+        return false;
+    }
 };
 
 // Authentication Functions

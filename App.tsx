@@ -52,24 +52,27 @@ const App: React.FC = () => {
 
         if (loggedInUserId && loggedInCompanyCode && loggedInEmail) {
             // Auto-login with stored credentials
-            api.setCurrentUserEmail(loggedInEmail).then(() => {
-                return api.getEmployeeById(loggedInUserId);
-            }).then(userProfile => {
-                if (userProfile) {
-                    return api.getUserAccountByEmployeeId(loggedInUserId).then(account => {
+            const initSession = async () => {
+                try {
+                    // Initialize company context
+                    await api.initializeCompanyContext(loggedInCompanyCode);
+                    await api.setCurrentUserEmail(loggedInEmail);
+
+                    const userProfile = await api.getEmployeeById(loggedInUserId);
+
+                    if (userProfile) {
+                        const account = await api.getUserAccountByEmployeeId(loggedInUserId);
                         if (account) {
                             setCurrentUser({ user: userProfile, role: account.role, companyCode: loggedInCompanyCode });
                             setCompanyCode(loggedInCompanyCode);
                         }
-                        setIsLoading(false);
-                    });
-                } else {
-                    setIsLoading(false);
+                    }
+                } catch (err) {
+                    console.error('Auto-login error:', err);
                 }
-            }).catch((err) => {
-                console.error('Auto-login error:', err);
                 setIsLoading(false);
-            });
+            };
+            initSession();
         } else {
             setIsLoading(false);
         }
