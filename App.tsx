@@ -41,6 +41,7 @@ const App: React.FC = () => {
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
     const [apiError, setApiError] = useState('');
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -115,14 +116,16 @@ const App: React.FC = () => {
                 setApiError(result.error);
             } else {
                 setCurrentUser({ user: result.user, role: result.role, companyCode });
-                localStorage.setItem('loggedInUserId', result.user.id);
-                localStorage.setItem('loggedInCompanyCode', companyCode);
-                localStorage.setItem('loggedInEmail', email);
+                if (rememberMe) {
+                    localStorage.setItem('loggedInUserId', result.user.id);
+                    localStorage.setItem('loggedInCompanyCode', companyCode);
+                    localStorage.setItem('loggedInEmail', email);
+                }
             }
         } catch (err: any) {
             setApiError(err.message || 'Login failed. Please try again.');
         }
-    }, [companyCode, email, password, validate]);
+    }, [companyCode, email, password, rememberMe, validate]);
 
     const handleRegister = useCallback(async () => {
         setApiError('');
@@ -135,14 +138,16 @@ const App: React.FC = () => {
             } else {
                 // Auto-login after registration
                 setCurrentUser({ user: result.user, role: result.role, companyCode });
-                localStorage.setItem('loggedInUserId', result.user.id);
-                localStorage.setItem('loggedInCompanyCode', companyCode);
-                localStorage.setItem('loggedInEmail', email);
+                if (rememberMe) {
+                    localStorage.setItem('loggedInUserId', result.user.id);
+                    localStorage.setItem('loggedInCompanyCode', companyCode);
+                    localStorage.setItem('loggedInEmail', email);
+                }
             }
         } catch (err: any) {
             setApiError(err.message || 'Registration failed. Please try again.');
         }
-    }, [companyCode, companyName, firstName, lastName, email, password, validate]);
+    }, [companyCode, companyName, firstName, lastName, email, password, rememberMe, validate]);
 
     const handleLogout = useCallback(() => {
         setCurrentUser({ user: null, role: null, companyCode: '' });
@@ -261,6 +266,21 @@ const App: React.FC = () => {
                                     <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className={`mt-1 input-field ${errors.password ? 'invalid' : ''}`}/>
                                     {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
                                 </div>
+
+                                {!isRegistering && (
+                                    <div className="flex items-center">
+                                        <input
+                                            id="rememberMe"
+                                            type="checkbox"
+                                            checked={rememberMe}
+                                            onChange={(e) => setRememberMe(e.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-300 text-[rgb(var(--color-primary))] focus:ring-[rgb(var(--color-primary))]"
+                                        />
+                                        <label htmlFor="rememberMe" className="ml-2 block text-sm text-slate-700">
+                                            Remember me
+                                        </label>
+                                    </div>
+                                )}
 
                                 {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
 

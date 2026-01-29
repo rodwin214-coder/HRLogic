@@ -1693,17 +1693,78 @@ export const processPayrollAndNotify = async (payrollData: any): Promise<void> =
 };
 
 export const deleteShift = async (shiftId: string): Promise<void> => {
-    console.warn('deleteShift: Not yet implemented in Supabase');
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('shifts')
+            .delete()
+            .eq('id', shiftId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting shift:', error);
+        throw error;
+    }
 };
 
 export const updateShift = async (shift: Shift): Promise<Shift> => {
-    console.warn('updateShift: Not yet implemented in Supabase');
-    return shift;
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('shifts')
+            .update({
+                name: shift.name,
+                start_time: shift.startTime,
+                end_time: shift.endTime,
+            })
+            .eq('id', shift.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            startTime: data.start_time,
+            endTime: data.end_time,
+        };
+    } catch (error) {
+        console.error('Error updating shift:', error);
+        throw error;
+    }
 };
 
 export const addShift = async (shift: Omit<Shift, 'id'>): Promise<Shift> => {
-    console.warn('addShift: Not yet implemented in Supabase');
-    return { ...shift, id: 'temp-id' };
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { data, error } = await supabase
+            .from('shifts')
+            .insert([{
+                company_id: currentCompanyId,
+                name: shift.name,
+                start_time: shift.startTime,
+                end_time: shift.endTime,
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            startTime: data.start_time,
+            endTime: data.end_time,
+        };
+    } catch (error) {
+        console.error('Error adding shift:', error);
+        throw error;
+    }
 };
 
 export const getLeavePolicy = async (): Promise<LeavePolicy | undefined> => {
