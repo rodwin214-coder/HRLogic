@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/supabaseApi';
-import { Employee, RequestType, LeaveBalance, CustomFieldDefinition } from '../../types';
+import { Employee, RequestType, LeaveBalance, CustomFieldDefinition, EmployeeFile } from '../../types';
 import Modal from '../common/Modal';
 import ChangePasswordModal from './ChangePasswordModal';
 
@@ -84,6 +84,9 @@ const EmployeeProfile: React.FC = () => {
     const [pendingChanges, setPendingChanges] = useState<Partial<Employee> | null>(null);
     const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
     const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+    const [files, setFiles] = useState<EmployeeFile[]>([]);
+    const [loadingFiles, setLoadingFiles] = useState(false);
+    const [fileError, setFileError] = useState('');
 
     const refreshEmployee = async () => {
         if (user) {
@@ -102,8 +105,24 @@ const EmployeeProfile: React.FC = () => {
         }
     };
 
+    const loadFiles = async () => {
+        if (!user) return;
+        setLoadingFiles(true);
+        setFileError('');
+        try {
+            const employeeFiles = await api.getEmployeeFiles(user.id);
+            setFiles(employeeFiles);
+        } catch (err) {
+            console.error('Load files error:', err);
+            setFileError(`Failed to load files: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setLoadingFiles(false);
+        }
+    };
+
     useEffect(() => {
         refreshEmployee();
+        loadFiles();
     }, [user]);
 
     const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,6 +193,26 @@ const EmployeeProfile: React.FC = () => {
         setPendingChanges(null);
         setIsEditing(false);
         await refreshEmployee();
+    };
+
+    const handleDownloadFile = (file: EmployeeFile) => {
+        const link = document.createElement('a');
+        link.href = file.fileData;
+        link.download = file.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const formatFileSize = (bytes: number): string => {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    };
+
+    const formatDate = (dateString: string): string => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
     };
 
     if (!employee || !formData) return <div>Loading profile...</div>;
@@ -317,9 +356,59 @@ const EmployeeProfile: React.FC = () => {
 
             <div>
                 <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                    <h3 className="text-xl font-semibold text-slate-700">My Files</h3>
+                </div>
+                {fileError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                        {fileError}
+                    </div>
+                )}
+                {loadingFiles ? (
+                    <div className="text-center py-8 text-slate-500">Loading files...</div>
+                ) : files.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">No files uploaded yet</div>
+                ) : (
+                    <div className="space-y-3">
+                        {files.map(file => (
+                            <div key={file.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border hover:bg-slate-100 transition-colors">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-3">
+                                        <svg className="w-8 h-8 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-medium text-slate-800 truncate">{file.fileName}</p>
+                                            <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
+                                                <span>{formatFileSize(file.fileSize)}</span>
+                                                <span>•</span>
+                                                <span>{formatDate(file.uploadedAt)}</span>
+                                            </div>
+                                            {file.description && (
+                                                <p className="text-sm text-slate-600 mt-1">{file.description}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleDownloadFile(file)}
+                                    className="ml-4 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0"
+                                    title="Download"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div>
+                <div className="flex justify-between items-center mb-4 pb-2 border-b">
                     <h3 className="text-xl font-semibold text-slate-700">Security</h3>
                 </div>
-                <button 
+                <button
                     onClick={() => setIsChangePasswordModalOpen(true)}
                     className="btn btn-secondary"
                 >
