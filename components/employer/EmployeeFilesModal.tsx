@@ -23,11 +23,13 @@ const EmployeeFilesModal: React.FC<EmployeeFilesModalProps> = ({ employee, curre
 
     const loadFiles = async () => {
         setLoading(true);
+        setError('');
         try {
             const employeeFiles = await getEmployeeFiles(employee.id);
             setFiles(employeeFiles);
         } catch (err) {
-            setError('Failed to load files');
+            console.error('Load files error:', err);
+            setError(`Failed to load files: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
         }
@@ -61,7 +63,8 @@ const EmployeeFilesModal: React.FC<EmployeeFilesModalProps> = ({ employee, curre
                 );
 
                 if ('error' in result) {
-                    setError(result.error);
+                    console.error('Upload error:', result.error);
+                    setError(`Upload failed: ${result.error}`);
                 } else {
                     setFiles([result, ...files]);
                     setDescription('');
@@ -77,7 +80,8 @@ const EmployeeFilesModal: React.FC<EmployeeFilesModalProps> = ({ employee, curre
             };
             reader.readAsDataURL(file);
         } catch (err) {
-            setError('Failed to upload file');
+            console.error('Upload exception:', err);
+            setError(`Failed to upload file: ${err instanceof Error ? err.message : 'Unknown error'}`);
             setUploading(false);
         }
     };
@@ -89,7 +93,8 @@ const EmployeeFilesModal: React.FC<EmployeeFilesModalProps> = ({ employee, curre
             await deleteEmployeeFile(fileId);
             setFiles(files.filter(f => f.id !== fileId));
         } catch (err) {
-            setError('Failed to delete file');
+            console.error('Delete error:', err);
+            setError(`Failed to delete file: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
     };
 
