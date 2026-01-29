@@ -89,15 +89,12 @@ export const Reports: React.FC = () => {
         fetchData();
     };
 
-    const handleGeneratePayroll = () => {
+    const handleGeneratePayroll = async () => {
         setIsGenerating(true);
         setProcessMessage('');
-        // Simulate a short delay for calculation
-        setTimeout(() => {
-            const summary = api.calculatePayrollSummary(startDate, endDate);
-            setPayrollSummary(summary);
-            setIsGenerating(false);
-        }, 500);
+        const summary = await api.calculatePayrollSummary(startDate, endDate);
+        setPayrollSummary(summary);
+        setIsGenerating(false);
     };
 
     const handleProcessPayroll = async () => {
@@ -222,67 +219,99 @@ export const Reports: React.FC = () => {
     const exportToCSV = (exportType: 'all' | 'attendance' | 'requests' | 'absences') => {
         let csvContent = "data:text/csv;charset=utf-8,";
         let fileName = `report_${startDate}_to_${endDate}.csv`;
-        
+
         const escapeCSV = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
+
+        const standardHeader = "Report Type,Employee,Date,Clock In Time,Clock Out Time,Details,Hours,Status\n";
 
         switch(exportType) {
             case 'attendance':
                 fileName = `attendance_${startDate}_to_${endDate}.csv`;
-                csvContent += "Employee,Date,Clock In,Clock In Location,Clock Out,Total Hours,Status\n";
+                csvContent += standardHeader;
                 filteredAttendance.forEach(record => {
                     const employee = getEmployee(record.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
                     const clockIn = new Date(record.clockInTime).toLocaleTimeString();
-                    const location = record.clockInLocation
-                        ? `${record.clockInLocation.latitude}, ${record.clockInLocation.longitude}${record.clockInLocation.accuracy ? ` (±${record.clockInLocation.accuracy.toFixed(0)}m)` : ''}`
-                        : 'N/A';
-                    const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A';
+                    const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '';
+                    const locationInfo = record.clockInLocation
+                        ? `Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
+                        : '';
+                    const details = locationInfo + (record.manualEntryReason ? ` | Manual Entry: ${record.manualEntryReason}` : '');
                     const { totalHours, status } = calculateStatus(record);
-                    csvContent += [empName, date, clockIn, location, clockOut, totalHours, status].map(escapeCSV).join(",") + "\n";
+                    csvContent += ["Attendance", empName, date, clockIn, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
                 });
                 break;
             case 'requests':
                 fileName = `requests_${startDate}_to_${endDate}.csv`;
-                csvContent += "Employee,Type,Details,Date Filed,Status\n";
+                csvContent += standardHeader;
                 filteredRequests.forEach(req => {
                     const employee = getEmployee(req.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
-                    const date = req.type === RequestType.LEAVE ? `${req.startDate} to ${req.endDate}` : req.date;
-                    const details = req.type === RequestType.LEAVE ? `${req.leaveType}` : `${req.hours} hrs`;
-                    csvContent += [empName, req.type, `${date}, ${details}`, new Date(req.dateFiled).toLocaleDateString(), req.status].map(escapeCSV).join(",") + "\n";
+
+                    if (req.type === RequestType.LEAVE) {
+                        const start = new Date(req.startDate + 'T00:00:00');
+                        const end = new Date(req.endDate + 'T00:00:00');
+                        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                        const hours = days * 8;
+                        const details = `${req.leaveType} | ${req.reason || ''}`;
+                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
+                    } else if (req.type === RequestType.OVERTIME || req.type === RequestType.UNDERTIME) {
+                        const details = req.reason || '';
+                        csvContent += [req.type, empName, req.date, '', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
+                    } else {
+                        const details = req.reason || 'Information change request';
+                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
+                    }
                 });
                 break;
             case 'absences':
                  fileName = `absences_${startDate}_to_${endDate}.csv`;
-                 csvContent += "Employee,Date of Absence,Status\n";
+                 csvContent += standardHeader;
                  filteredAbsences.forEach(({employee, date}) => {
-                     csvContent += [`${employee.firstName} ${employee.lastName}`, date, "Absent"].map(escapeCSV).join(",") + "\n";
+                     csvContent += ["Absence", `${employee.firstName} ${employee.lastName}`, date, '', '', 'No clock-in or approved leave', '', "Absent"].map(escapeCSV).join(",") + "\n";
                  });
                  break;
             case 'all':
             default:
-                csvContent += "Report Type,Employee,Date,Details,Status/Total Hours\n";
+                csvContent += standardHeader;
+
                 filteredAttendance.forEach(record => {
                     const employee = getEmployee(record.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
+                    const clockIn = new Date(record.clockInTime).toLocaleTimeString();
+                    const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '';
                     const locationInfo = record.clockInLocation
-                        ? ` Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
+                        ? `Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
                         : '';
-                    const details = `Clock In: ${new Date(record.clockInTime).toLocaleTimeString()}, Clock Out: ${record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : 'N/A'}${locationInfo}`;
-                    const { totalHours } = calculateStatus(record);
-                    csvContent += ["Attendance", empName, date, details, totalHours].map(escapeCSV).join(",") + "\n";
+                    const details = locationInfo + (record.manualEntryReason ? ` | Manual Entry: ${record.manualEntryReason}` : '');
+                    const { totalHours, status } = calculateStatus(record);
+                    csvContent += ["Attendance", empName, date, clockIn, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
                 });
+
                 filteredRequests.forEach(req => {
                     const employee = getEmployee(req.employeeId);
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
-                    const date = req.type === RequestType.LEAVE ? `${req.startDate} to ${req.endDate}` : req.date;
-                    const details = req.type === RequestType.LEAVE ? `${req.leaveType}` : `${req.hours} hrs`;
-                    csvContent += [req.type, empName, date, details, req.status].map(escapeCSV).join(",") + "\n";
+
+                    if (req.type === RequestType.LEAVE) {
+                        const start = new Date(req.startDate + 'T00:00:00');
+                        const end = new Date(req.endDate + 'T00:00:00');
+                        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                        const hours = days * 8;
+                        const details = `${req.leaveType} | ${req.reason || ''}`;
+                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
+                    } else if (req.type === RequestType.OVERTIME || req.type === RequestType.UNDERTIME) {
+                        const details = req.reason || '';
+                        csvContent += [req.type, empName, req.date, '', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
+                    } else {
+                        const details = req.reason || 'Information change request';
+                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
+                    }
                 });
+
                 filteredAbsences.forEach(({employee, date}) => {
-                    csvContent += ["Absence", `${employee.firstName} ${employee.lastName}`, date, "No clock-in or approved leave", "Absent"].map(escapeCSV).join(",") + "\n";
+                    csvContent += ["Absence", `${employee.firstName} ${employee.lastName}`, date, '', '', 'No clock-in or approved leave', '', "Absent"].map(escapeCSV).join(",") + "\n";
                 });
                 break;
         }

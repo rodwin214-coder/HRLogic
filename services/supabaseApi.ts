@@ -1395,17 +1395,145 @@ export const bulkInviteEmployees = async (csvData: string): Promise<{ successCou
     return { successCount: 0, errors: ['Bulk invite not yet implemented'] };
 };
 
-export const updateAttendance = async (record: AttendanceRecord): Promise<void> => {
-    console.warn('updateAttendance: Not yet implemented in Supabase');
+export const updateAttendance = async (record: AttendanceRecord, reason: string, editorId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        const { error } = await supabase
+            .from('attendance_records')
+            .update({
+                clock_in_time: record.clockInTime,
+                clock_out_time: record.clockOutTime || null,
+                clock_in_photo: record.clockInPhoto || null,
+                clock_in_location: record.clockInLocation || null,
+                clock_out_photo: record.clockOutPhoto || null,
+                clock_out_location: record.clockOutLocation || null,
+                end_of_day_notes: record.endOfDayNotes || null,
+                manual_entry_reason: reason,
+            })
+            .eq('id', record.id);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error updating attendance:', error);
+        throw error;
+    }
 };
 
 export const addManualAttendance = async (record: Omit<AttendanceRecord, 'id'>, reason: string, addedBy: string): Promise<void> => {
-    console.warn('addManualAttendance: Not yet implemented in Supabase');
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        const { error } = await supabase
+            .from('attendance_records')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: record.employeeId,
+                clock_in_time: record.clockInTime,
+                clock_out_time: record.clockOutTime || null,
+                clock_in_photo: record.clockInPhoto || null,
+                clock_in_location: record.clockInLocation || null,
+                clock_out_photo: record.clockOutPhoto || null,
+                clock_out_location: record.clockOutLocation || null,
+                end_of_day_notes: record.endOfDayNotes || null,
+                manual_entry_reason: reason,
+            }]);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error adding manual attendance:', error);
+        throw error;
+    }
 };
 
-export const calculatePayrollSummary = (attendance: AttendanceRecord[], employees: Employee[], shifts: Shift[], startDate: string, endDate: string): any => {
-    console.warn('calculatePayrollSummary: Not yet implemented in Supabase');
-    return { employees: [], totalPayroll: 0 };
+export const calculatePayrollSummary = async (startDate: string, endDate: string): Promise<any[]> => {
+    try {
+        const [attendance, employees, requests] = await Promise.all([
+            getAttendance(),
+            getEmployees(),
+            getRequests(),
+        ]);
+
+        const filteredAttendance = attendance.filter(record => {
+            const recordDate = record.clockInTime.split('T')[0];
+            return recordDate >= startDate && recordDate <= endDate;
+        });
+
+        const filteredRequests = requests.filter(req => {
+            if (req.type === RequestType.LEAVE) {
+                return !(new Date(req.endDate) < new Date(startDate) || new Date(req.startDate) > new Date(endDate));
+            }
+            if (req.type === RequestType.OVERTIME || req.type === RequestType.UNDERTIME) {
+                return req.date >= startDate && req.date <= endDate;
+            }
+            return false;
+        });
+
+        const summary = employees.map(emp => {
+            const empAttendance = filteredAttendance.filter(a => a.employeeId === emp.id);
+            const empRequests = filteredRequests.filter(r => r.employeeId === emp.id);
+
+            let totalHours = 0;
+            let otHours = 0;
+            let leaveDays = 0;
+
+            empAttendance.forEach(record => {
+                if (record.clockOutTime) {
+                    const clockIn = new Date(record.clockInTime);
+                    const clockOut = new Date(record.clockOutTime);
+                    const diffMs = clockOut.getTime() - clockIn.getTime();
+                    totalHours += diffMs / (1000 * 60 * 60);
+                }
+            });
+
+            empRequests.forEach(req => {
+                if (req.type === RequestType.OVERTIME && req.status === RequestStatus.APPROVED) {
+                    otHours += req.hours;
+                    totalHours += req.hours;
+                } else if (req.type === RequestType.LEAVE && req.status === RequestStatus.APPROVED) {
+                    const start = new Date(req.startDate + 'T00:00:00');
+                    const end = new Date(req.endDate + 'T00:00:00');
+                    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    leaveDays += days;
+                    totalHours += days * 8;
+                }
+            });
+
+            const latestSalary = emp.salaryHistory.length > 0
+                ? emp.salaryHistory.sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime())[0]
+                : null;
+
+            let grossPay = '0';
+            if (latestSalary) {
+                const monthlySalary = latestSalary.basicSalary + (latestSalary.allowance || 0) + (latestSalary.otherBenefits || 0);
+                const hourlyRate = monthlySalary / 160;
+                const regularPay = (totalHours - otHours) * hourlyRate;
+                const overtimePay = otHours * hourlyRate * 1.5;
+                grossPay = (regularPay + overtimePay).toFixed(2);
+            }
+
+            return {
+                employeeId: emp.id,
+                employeeName: `${emp.firstName} ${emp.lastName}`,
+                employeeEmail: emp.email,
+                totalHours: totalHours.toFixed(2),
+                otHours: otHours.toFixed(2),
+                leaveDays,
+                grossPay,
+            };
+        });
+
+        return summary;
+    } catch (error) {
+        console.error('Error calculating payroll summary:', error);
+        return [];
+    }
 };
 
 export const processPayrollAndNotify = async (payrollData: any): Promise<void> => {
