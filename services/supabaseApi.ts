@@ -352,6 +352,49 @@ export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
     }
 };
 
+export const updateCompanyProfile = async (profile: CompanyProfile): Promise<CompanyProfile | null> => {
+    try {
+        if (!currentCompanyId) return null;
+
+        const { data, error } = await supabase
+            .from('companies')
+            .update({
+                name: profile.name,
+                address: profile.address,
+                contact_number: profile.contactNumber,
+                email: profile.email,
+                tin: profile.tin,
+                logo: profile.logo,
+                work_schedule: profile.workSchedule,
+            })
+            .eq('id', currentCompanyId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            address: data.address || '',
+            contactNumber: data.contact_number || '',
+            email: data.email || '',
+            tin: data.tin || '',
+            logo: data.logo,
+            workSchedule: data.work_schedule || WorkSchedule.MONDAY_TO_FRIDAY,
+        };
+    } catch (error) {
+        console.error('Error updating company profile:', error);
+        return null;
+    }
+};
+
+export const clearAllData = (): void => {
+    // This is a stub function for compatibility
+    // In a real implementation, this would delete all data for the current company
+    console.warn('clearAllData is not implemented for Supabase yet');
+};
+
 // Placeholder functions for compatibility
 // These should be implemented based on your needs
 export const getShifts = async (): Promise<Shift[]> => {

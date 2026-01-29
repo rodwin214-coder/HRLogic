@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { CompanyProfile as CompanyProfileType, WorkSchedule } from '../../types';
 import { UserContext } from '../../App';
 
@@ -62,9 +62,12 @@ const CompanyProfile: React.FC = () => {
     }, [formData, isEditing, validate]);
 
     useEffect(() => {
-        const data = api.getCompanyProfile();
-        setProfile(data);
-        setFormData(data);
+        const loadProfile = async () => {
+            const data = await api.getCompanyProfile();
+            setProfile(data);
+            setFormData(data);
+        };
+        loadProfile();
     }, []);
 
     const handleEditToggle = () => {
@@ -89,10 +92,10 @@ const CompanyProfile: React.FC = () => {
         }
     };
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (formData && validate()) {
-            const updatedProfile = api.updateCompanyProfile(formData);
+            const updatedProfile = await api.updateCompanyProfile(formData);
             setProfile(updatedProfile);
             setIsEditing(false);
         }
