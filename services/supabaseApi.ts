@@ -1208,8 +1208,65 @@ export const updateProfilePicture = async (employeeId: string, base64Image: stri
 };
 
 export const updateRequestStatus = async (requestId: string, status: RequestStatus, editorId: string): Promise<AppRequest | undefined> => {
-    console.warn('updateRequestStatus: Not yet implemented in Supabase');
-    return undefined;
+    try {
+        const { data: request, error: fetchError } = await supabase
+            .from('requests')
+            .select('*')
+            .eq('id', requestId)
+            .maybeSingle();
+
+        if (fetchError || !request) {
+            console.error('Error fetching request:', fetchError);
+            return undefined;
+        }
+
+        const { data, error } = await supabase
+            .from('requests')
+            .update({ status })
+            .eq('id', requestId)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating request status:', error);
+            return undefined;
+        }
+
+        if (status === RequestStatus.APPROVED && request.request_type === RequestType.CHANGE_REQUEST && request.changes) {
+            const updateData: any = {};
+            Object.entries(request.changes).forEach(([key, value]) => {
+                const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                updateData[snakeKey] = value;
+            });
+
+            const { error: employeeUpdateError } = await supabase
+                .from('employees')
+                .update(updateData)
+                .eq('id', request.employee_id);
+
+            if (employeeUpdateError) {
+                console.error('Error updating employee:', employeeUpdateError);
+            }
+        }
+
+        return {
+            id: data.id,
+            employeeId: data.employee_id,
+            type: data.request_type,
+            status: data.status,
+            dateFiled: data.date_filed,
+            leaveType: data.leave_type,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            date: data.date,
+            hours: parseFloat(data.hours || 0),
+            reason: data.reason,
+            changes: data.changes,
+        } as AppRequest;
+    } catch (error) {
+        console.error('Error in updateRequestStatus:', error);
+        return undefined;
+    }
 };
 
 export const resetEmployeePassword = (employeeId: string, newPassword: string): { success: boolean, message: string } => {
