@@ -365,6 +365,7 @@ export const inviteEmployee = async (employeeData: {
     lastName: string;
     email: string;
     department: string;
+    shiftId?: string;
 }): Promise<Employee | { error: string }> => {
     try {
         await ensureUserContext();
@@ -404,6 +405,7 @@ export const inviteEmployee = async (employeeData: {
                 date_hired: new Date().toISOString().split('T')[0],
                 status: EmployeeStatus.ACTIVE,
                 employment_type: EmploymentType.PROBATIONARY,
+                shift_id: employeeData.shiftId || null,
             }])
             .select()
             .single();

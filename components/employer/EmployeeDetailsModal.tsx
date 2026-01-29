@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/supabaseApi';
-import { Employee, Task, TaskStatus, LeaveBalance, AuditLog, SalaryHistoryRecord, WorkSchedule, EmploymentType, CustomFieldDefinition, CustomFieldType } from '../../types';
+import { Employee, Task, TaskStatus, LeaveBalance, AuditLog, SalaryHistoryRecord, WorkSchedule, EmploymentType, CustomFieldDefinition, CustomFieldType, Shift } from '../../types';
 import LeaveAdjustmentModal from './LeaveAdjustmentModal';
 
 type DetailTab = 'profile' | 'salary' | 'tasks' | 'leave' | 'audit';
@@ -34,6 +34,7 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(employee);
     const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
+    const [shifts, setShifts] = useState<Shift[]>([]);
 
     useEffect(() => {
         setFormData(employee);
@@ -44,7 +45,12 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
             const fields = await api.getCustomFieldDefinitions();
             setCustomFieldDefs(fields);
         };
+        const loadShifts = async () => {
+            const shiftsData = await api.getShifts();
+            setShifts(shiftsData);
+        };
         loadCustomFields();
+        loadShifts();
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -158,7 +164,15 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                         <option value="">Use Company Default</option>
                         {Object.values(WorkSchedule).map(ws => ( <option key={ws} value={ws}>{ws}</option> ))}
                     </ScopedEditField>
-                    
+                    <ScopedEditField label="Work Shift" name="shiftId" value={formData.shiftId} type="select">
+                        <option value="">No shift assigned</option>
+                        {shifts.map(shift => (
+                            <option key={shift.id} value={shift.id}>
+                                {shift.name} ({shift.startTime} - {shift.endTime})
+                            </option>
+                        ))}
+                    </ScopedEditField>
+
                     {/* Government IDs */}
                     <h4 className="md:col-span-3 text-md font-semibold text-slate-600 border-b pb-1 mt-4">Government IDs</h4>
                     <ScopedEditField label="TIN #" name="tinNumber" value={formData.tinNumber} />
@@ -195,6 +209,14 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                             <ProfileField label="Employment Type" value={employee.employmentType} />
                             <ProfileField label="Department" value={employee.department} />
                             <ProfileField label="Work Schedule" value={employee.workSchedule || 'Company Default'} />
+                            <ProfileField
+                                label="Work Shift"
+                                value={
+                                    employee.shiftId
+                                        ? shifts.find(s => s.id === employee.shiftId)?.name || 'Unknown'
+                                        : 'Not assigned'
+                                }
+                            />
                         </div>
                     </div>
 

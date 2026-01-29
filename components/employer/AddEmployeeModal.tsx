@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Modal from '../common/Modal';
 import * as api from '../../services/supabaseApi';
+import { Shift } from '../../types';
 
 interface AddEmployeeModalProps {
     onClose: () => void;
@@ -13,10 +14,20 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
         lastName: '',
         email: '',
         department: '',
+        shiftId: '',
     });
+    const [shifts, setShifts] = useState<Shift[]>([]);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [apiError, setApiError] = useState('');
     const [isAdding, setIsAdding] = useState(false);
+
+    useEffect(() => {
+        const fetchShifts = async () => {
+            const shiftsData = await api.getShifts();
+            setShifts(shiftsData);
+        };
+        fetchShifts();
+    }, []);
 
     const validate = useCallback(() => {
         const newErrors: { [key: string]: string } = {};
@@ -28,7 +39,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
             newErrors.email = 'Email address is invalid.';
         }
         if (!formData.department.trim()) newErrors.department = 'Department is required.';
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }, [formData]);
@@ -37,7 +48,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
         validate();
     }, [formData, validate]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -47,7 +58,10 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
 
         setIsAdding(true);
         setApiError('');
-        const result = await api.inviteEmployee(formData);
+        const result = await api.inviteEmployee({
+            ...formData,
+            shiftId: formData.shiftId || undefined,
+        });
 
         if ('error' in result) {
             setApiError(result.error);
@@ -86,6 +100,22 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
                     <label className="block text-sm font-medium text-slate-700">Department</label>
                     <input name="department" value={formData.department} onChange={handleChange} required className={`mt-1 input-field ${errors.department ? 'invalid' : ''}`}/>
                     {errors.department && <p className="text-xs text-red-600 mt-1">{errors.department}</p>}
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700">Work Shift</label>
+                    <select
+                        name="shiftId"
+                        value={formData.shiftId}
+                        onChange={handleChange}
+                        className="mt-1 input-field"
+                    >
+                        <option value="">Select a shift (optional)</option>
+                        {shifts.map(shift => (
+                            <option key={shift.id} value={shift.id}>
+                                {shift.name} ({shift.startTime} - {shift.endTime})
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
