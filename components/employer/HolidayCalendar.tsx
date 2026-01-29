@@ -16,12 +16,17 @@ const HolidayForm: React.FC<{onClose: () => void; onSave: () => void}> = ({onClo
         setIsFormValid(name.trim() !== '' && date !== '');
     }, [name, date]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isFormValid) {
-            api.addHoliday({ name, date, country, type });
-            onSave();
-            onClose();
+            try {
+                await api.addHoliday({ name, date, country, type });
+                await onSave();
+                onClose();
+            } catch (error) {
+                console.error('Failed to add holiday:', error);
+                alert('Failed to add holiday. Please try again.');
+            }
         }
     };
 
