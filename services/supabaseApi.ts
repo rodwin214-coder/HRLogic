@@ -36,8 +36,20 @@ export const setCurrentUserEmail = async (email: string) => {
             setting_value: email
         } as any);
     } catch (error) {
-        // If the function doesn't exist, we'll need to create it
         console.warn('set_config RPC not available, RLS may not work correctly');
+    }
+};
+
+const ensureUserContext = async () => {
+    if (currentUserEmail) {
+        try {
+            await supabase.rpc('set_config', {
+                setting_name: 'app.current_user_email',
+                setting_value: currentUserEmail
+            } as any);
+        } catch (error) {
+            console.warn('Failed to set user context for RLS');
+        }
     }
 };
 
@@ -331,6 +343,7 @@ export const getUserAccountByEmployeeId = async (employeeId: string): Promise<Us
 
 export const getEmployees = async (): Promise<Employee[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('employees')
             .select('*')
@@ -655,6 +668,7 @@ export const bulkImportEmployees = async (csvData: string): Promise<{ successCou
 // Company Profile Functions
 export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) return null;
 
         const { data, error } = await supabase
@@ -768,6 +782,7 @@ export const getHolidays = async (): Promise<Holiday[]> => {
 
 export const getRequests = async (): Promise<AppRequest[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('requests')
             .select('*')
@@ -796,6 +811,7 @@ export const getRequests = async (): Promise<AppRequest[]> => {
 
 export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' | 'dateFiled'>): Promise<AppRequest> => {
     try {
+        await ensureUserContext();
         if (!currentCompanyId) {
             throw new Error('Company context not set');
         }
@@ -842,6 +858,7 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
 
 export const getAttendance = async (): Promise<AttendanceRecord[]> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('attendance_records')
             .select('*')
@@ -868,6 +885,7 @@ export const getAttendance = async (): Promise<AttendanceRecord[]> => {
 
 export const getTodaysAttendance = async (employeeId: string): Promise<AttendanceRecord | undefined> => {
     try {
+        await ensureUserContext();
         const today = new Date().toISOString().split('T')[0];
         const { data, error } = await supabase
             .from('attendance_records')
@@ -1209,6 +1227,7 @@ export const updateProfilePicture = async (employeeId: string, base64Image: stri
 
 export const updateRequestStatus = async (requestId: string, status: RequestStatus, editorId: string): Promise<AppRequest | undefined> => {
     try {
+        await ensureUserContext();
         const { data, error } = await supabase
             .from('requests')
             .update({ status })
