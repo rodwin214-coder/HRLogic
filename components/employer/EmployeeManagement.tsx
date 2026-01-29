@@ -291,7 +291,18 @@ const EmployeeManagement: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <button onClick={() => setSelectedEmployee(employee)} className="text-indigo-600 hover:text-indigo-900">Details</button>
-                                    <button onClick={() => setSelectedEmployeeForFiles(employee)} className="ml-4 text-blue-600 hover:text-blue-900">Files</button>
+                                    <button
+                                        onClick={() => {
+                                            if (!editor) {
+                                                alert('User context not available. Please try logging out and back in.');
+                                                return;
+                                            }
+                                            setSelectedEmployeeForFiles(employee);
+                                        }}
+                                        className="ml-4 text-blue-600 hover:text-blue-900"
+                                    >
+                                        Files
+                                    </button>
                                     {employee.status === EmployeeStatus.ACTIVE ? (
                                         <button onClick={() => handleStatusChange(employee, EmployeeStatus.TERMINATED)} className="ml-4 text-orange-600 hover:text-orange-900">Terminate</button>
                                     ) : (
