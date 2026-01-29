@@ -119,7 +119,7 @@ const EmployeeFilesModal: React.FC<EmployeeFilesModalProps> = ({ employee, curre
     };
 
     return (
-        <Modal onClose={onClose} title={`Files - ${employee.firstName} ${employee.lastName}`}>
+        <Modal isOpen={true} onClose={onClose} title={`Files - ${employee.firstName} ${employee.lastName}`}>
             <div className="space-y-6">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="font-semibold text-blue-900 mb-3">Upload New File</h3>
