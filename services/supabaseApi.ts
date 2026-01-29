@@ -423,6 +423,34 @@ export const inviteEmployee = async (employeeData: {
 
         if (accountError) throw accountError;
 
+        // Send invitation email
+        try {
+            const { data: company } = await supabase
+                .from('companies')
+                .select('name, company_code')
+                .eq('id', currentCompanyId)
+                .single();
+
+            if (company) {
+                const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-invitation-email`;
+                await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        employeeEmail: employeeData.email,
+                        employeeName: `${employeeData.firstName} ${employeeData.lastName}`,
+                        companyName: company.name,
+                        companyCode: company.company_code,
+                    }),
+                });
+            }
+        } catch (emailError) {
+            console.error('Failed to send invitation email:', emailError);
+        }
+
         // Convert to Employee type
         const employee = await convertDbEmployeeToEmployee(newEmployee);
         return employee;
@@ -1536,9 +1564,64 @@ export const addCustomFieldDefinition = async (def: Omit<CustomFieldDefinition, 
     }
 };
 
-export const requestPasswordReminder = async (email: string): Promise<{ success: boolean, message: string }> => {
-    console.warn('requestPasswordReminder: Not yet implemented in Supabase');
-    return { success: false, message: 'Password reminder not yet implemented' };
+export const requestPasswordReminder = async (companyCode: string, email: string): Promise<{ success: boolean, message: string }> => {
+    try {
+        const company = await getCompanyByCode(companyCode);
+        if (!company) {
+            return { success: false, message: 'Invalid company code.' };
+        }
+
+        const { data: account } = await supabase
+            .from('user_accounts')
+            .select('employee_id')
+            .eq('company_id', company.id)
+            .eq('email', email)
+            .maybeSingle();
+
+        if (!account) {
+            return { success: false, message: 'No account found with this email address.' };
+        }
+
+        const { data: employee } = await supabase
+            .from('employees')
+            .select('first_name, last_name')
+            .eq('id', account.employee_id)
+            .single();
+
+        if (!employee) {
+            return { success: false, message: 'Employee profile not found.' };
+        }
+
+        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-password-reset-email`;
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                employeeEmail: email,
+                employeeName: `${employee.first_name} ${employee.last_name}`,
+                companyName: company.name,
+                companyCode: company.company_code,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to send password reset email');
+        }
+
+        return {
+            success: true,
+            message: 'Password reset instructions have been sent to your email. Please contact your employer to reset your password.'
+        };
+    } catch (error: any) {
+        console.error('Error requesting password reminder:', error);
+        return {
+            success: false,
+            message: 'Failed to send password reminder. Please try again or contact your employer.'
+        };
+    }
 };
 
 // Export the WORKLOGIX_LOGO_BASE64 for compatibility
