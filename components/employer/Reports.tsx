@@ -389,25 +389,58 @@ export const Reports: React.FC = () => {
                 )}
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-slate-800">Historical Data & Reports</h2>
-                 <div className="flex items-center gap-2">
-                    <button onClick={handleOpenAddModal} className="btn btn-secondary">
-                        + Manual Entry
-                    </button>
-                    <div className="relative ml-2">
-                        <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="bg-blue-600 text-white hover:bg-blue-700 text-sm btn">
-                            Export Data
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            <div className="mb-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <h2 className="text-xl font-bold text-slate-800">Historical Data & Reports</h2>
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleOpenAddModal} className="btn btn-secondary">
+                            + Manual Entry
                         </button>
-                        {isExportMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
-                                <button onClick={() => exportToCSV('all')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export All</button>
-                                <button onClick={() => exportToCSV('attendance')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Attendance Only</button>
-                                <button onClick={() => exportToCSV('requests')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Requests Only</button>
-                                <button onClick={() => exportToCSV('absences')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Absences Only</button>
-                            </div>
-                        )}
+                        <div className="relative ml-2">
+                            <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} className="bg-blue-600 text-white hover:bg-blue-700 text-sm btn">
+                                Export Data
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            {isExportMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                                    <button onClick={() => exportToCSV('all')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export All</button>
+                                    <button onClick={() => exportToCSV('attendance')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Attendance Only</button>
+                                    <button onClick={() => exportToCSV('requests')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Requests Only</button>
+                                    <button onClick={() => exportToCSV('absences')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Absences Only</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                    <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Date Range:</label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            className="input-field text-sm"
+                        />
+                        <span className="text-slate-600">to</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            className="input-field text-sm"
+                        />
+                        <button
+                            onClick={() => {
+                                const today = new Date();
+                                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+                                const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+                                setStartDate(firstDay);
+                                setEndDate(lastDay);
+                            }}
+                            className="text-sm px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded-md text-slate-700 font-medium transition-colors"
+                        >
+                            This Month
+                        </button>
                     </div>
                 </div>
             </div>
