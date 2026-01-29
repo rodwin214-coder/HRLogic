@@ -1221,8 +1221,37 @@ export const addTask = async (taskData: Omit<Task, 'id'>): Promise<Task> => {
 };
 
 export const addHoliday = async (holiday: Omit<Holiday, 'id'>): Promise<Holiday> => {
-    console.warn('addHoliday: Not yet implemented in Supabase');
-    return { ...holiday, id: 'temp-id' };
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { data, error } = await supabase
+            .from('holidays')
+            .insert([{
+                company_id: currentCompanyId,
+                name: holiday.name,
+                date: holiday.date,
+                country: holiday.country || 'PH',
+                holiday_type: holiday.type || 'Regular',
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            date: data.date,
+            country: data.country || 'PH',
+            type: data.holiday_type || 'Regular',
+        };
+    } catch (error) {
+        console.error('Error adding holiday:', error);
+        throw error;
+    }
 };
 
 export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
