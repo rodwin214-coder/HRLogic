@@ -53,29 +53,37 @@ const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({ onClose, 
         validate();
     }, [validate]);
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!validate() || !editor) return;
 
-        if (recordToEdit) {
-            // Editing existing record
-            const updatedRecord: AttendanceRecord = {
-                ...recordToEdit,
-                clockInTime: new Date(clockIn).toISOString(),
-                clockOutTime: clockOut ? new Date(clockOut).toISOString() : undefined,
-                manualEntryReason: reason,
-            };
-            api.updateAttendance(updatedRecord, reason, editor.id);
-        } else {
-            // Adding new record
-            const newRecordData = {
-                employeeId,
-                clockInTime: new Date(clockIn).toISOString(),
-                clockOutTime: clockOut ? new Date(clockOut).toISOString() : undefined,
-                manualEntryReason: reason,
-            };
-            api.addManualAttendance(newRecordData, editor.id);
+        try {
+            if (recordToEdit) {
+                const updatedRecord: AttendanceRecord = {
+                    ...recordToEdit,
+                    clockInTime: new Date(clockIn).toISOString(),
+                    clockOutTime: clockOut ? new Date(clockOut).toISOString() : undefined,
+                    manualEntryReason: reason,
+                };
+                await api.updateAttendance(updatedRecord, reason, editor.id);
+            } else {
+                const newRecordData: Omit<AttendanceRecord, 'id'> = {
+                    employeeId,
+                    clockInTime: new Date(clockIn).toISOString(),
+                    clockOutTime: clockOut ? new Date(clockOut).toISOString() : undefined,
+                    clockInPhoto: undefined,
+                    clockInLocation: undefined,
+                    clockOutPhoto: undefined,
+                    clockOutLocation: undefined,
+                    endOfDayNotes: undefined,
+                    manualEntryReason: undefined,
+                };
+                await api.addManualAttendance(newRecordData, reason, editor.id);
+            }
+            onSuccess();
+        } catch (error) {
+            console.error('Error saving attendance:', error);
+            setErrors({ submit: 'Failed to save. Please try again.' });
         }
-        onSuccess();
     };
     
     const isFormValid = Object.keys(errors).length === 0;
@@ -123,6 +131,11 @@ const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({ onClose, 
                     />
                     {errors.reason && <p className="text-xs text-red-600 mt-1">{errors.reason}</p>}
                 </div>
+                {errors.submit && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                        <p className="text-sm text-red-700">{errors.submit}</p>
+                    </div>
+                )}
                  <div className="flex justify-end gap-2 pt-4 border-t">
                     <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
                     <button type="submit" disabled={!isFormValid} className="btn btn-primary">
