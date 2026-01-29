@@ -72,12 +72,12 @@ const RequestManagement: React.FC = () => {
         return employees.find(e => e.id === employeeId);
     };
 
-    const handleUpdateStatus = (requestId: string, status: RequestStatus) => {
+    const handleUpdateStatus = async (requestId: string, status: RequestStatus) => {
         if (!editor) {
             alert("Cannot process request: editor is not identified.");
             return;
         }
-        
+
         const request = requests.find(r => r.id === requestId);
         if (!request) return;
 
@@ -123,8 +123,8 @@ const RequestManagement: React.FC = () => {
         }
 
 
-        api.updateRequestStatus(requestId, status, editor.id);
-        fetchData();
+        await api.updateRequestStatus(requestId, status, editor.id);
+        await fetchData();
     };
 
 

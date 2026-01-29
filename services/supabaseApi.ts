@@ -1209,17 +1209,6 @@ export const updateProfilePicture = async (employeeId: string, base64Image: stri
 
 export const updateRequestStatus = async (requestId: string, status: RequestStatus, editorId: string): Promise<AppRequest | undefined> => {
     try {
-        const { data: request, error: fetchError } = await supabase
-            .from('requests')
-            .select('*')
-            .eq('id', requestId)
-            .maybeSingle();
-
-        if (fetchError || !request) {
-            console.error('Error fetching request:', fetchError);
-            return undefined;
-        }
-
         const { data, error } = await supabase
             .from('requests')
             .update({ status })
@@ -1232,9 +1221,9 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             return undefined;
         }
 
-        if (status === RequestStatus.APPROVED && request.request_type === RequestType.CHANGE_REQUEST && request.changes) {
+        if (status === RequestStatus.APPROVED && data.request_type === RequestType.CHANGE_REQUEST && data.changes) {
             const updateData: any = {};
-            Object.entries(request.changes).forEach(([key, value]) => {
+            Object.entries(data.changes).forEach(([key, value]) => {
                 const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
                 updateData[snakeKey] = value;
             });
@@ -1242,7 +1231,7 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             const { error: employeeUpdateError } = await supabase
                 .from('employees')
                 .update(updateData)
-                .eq('id', request.employee_id);
+                .eq('id', data.employee_id);
 
             if (employeeUpdateError) {
                 console.error('Error updating employee:', employeeUpdateError);
