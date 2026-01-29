@@ -1231,8 +1231,34 @@ export const changePassword = (employeeId: string, currentPassword: string, newP
 };
 
 export const getCustomFieldDefinitions = async (): Promise<CustomFieldDefinition[]> => {
-    console.warn('getCustomFieldDefinitions: Not yet implemented in Supabase');
-    return [];
+    try {
+        if (!currentCompanyId) {
+            console.error('No company ID set');
+            return [];
+        }
+
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('custom_field_definitions')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching custom field definitions:', error);
+            return [];
+        }
+
+        return (data || []).map(field => ({
+            id: field.id,
+            name: field.name,
+            type: field.field_type as CustomFieldType,
+            options: field.options || undefined,
+        }));
+    } catch (error) {
+        console.error('Error in getCustomFieldDefinitions:', error);
+        return [];
+    }
 };
 
 export const updateProfilePicture = async (employeeId: string, base64Image: string): Promise<void> => {
@@ -1416,16 +1442,69 @@ export const updateLeavePolicy = async (policy: LeavePolicy): Promise<void> => {
 };
 
 export const deleteCustomFieldDefinition = async (defId: string): Promise<void> => {
-    console.warn('deleteCustomFieldDefinition: Not yet implemented in Supabase');
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('custom_field_definitions')
+            .delete()
+            .eq('id', defId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting custom field definition:', error);
+        throw error;
+    }
 };
 
 export const updateCustomFieldDefinition = async (def: CustomFieldDefinition): Promise<void> => {
-    console.warn('updateCustomFieldDefinition: Not yet implemented in Supabase');
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('custom_field_definitions')
+            .update({
+                name: def.name,
+                field_type: def.type,
+                options: def.options || null,
+            })
+            .eq('id', def.id);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error updating custom field definition:', error);
+        throw error;
+    }
 };
 
 export const addCustomFieldDefinition = async (def: Omit<CustomFieldDefinition, 'id'>): Promise<CustomFieldDefinition> => {
-    console.warn('addCustomFieldDefinition: Not yet implemented in Supabase');
-    return { ...def, id: 'temp-id' };
+    try {
+        if (!currentCompanyId) {
+            throw new Error('No company ID set');
+        }
+
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('custom_field_definitions')
+            .insert({
+                company_id: currentCompanyId,
+                name: def.name,
+                field_type: def.type,
+                options: def.options || null,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            type: data.field_type as CustomFieldType,
+            options: data.options || undefined,
+        };
+    } catch (error) {
+        console.error('Error adding custom field definition:', error);
+        throw error;
+    }
 };
 
 export const requestPasswordReminder = async (email: string): Promise<{ success: boolean, message: string }> => {
