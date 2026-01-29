@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
-import * as api from '../../services/mockApi';
+import * as api from '../../services/supabaseApi';
 import { Employee, EmployeeStatus, WorkSchedule } from '../../types';
 import Modal from '../common/Modal';
 import { UserContext } from '../../App';
@@ -25,9 +25,9 @@ const BulkImportModal: React.FC<{onClose: () => void, onImport: () => void}> = (
 
         setIsImporting(true);
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             const csvData = event.target?.result as string;
-            const result = api.bulkImportEmployees(csvData);
+            const result = await api.bulkImportEmployees(csvData);
             setImportResult(result);
             setIsImporting(false);
             if (result.successCount > 0) {
@@ -90,15 +90,16 @@ const EmployeeManagement: React.FC = () => {
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
     const { user: editor } = useContext(UserContext);
     
-    const fetchData = useCallback(() => {
-        setEmployees(api.getEmployees().sort((a, b) => a.lastName.localeCompare(b.lastName)));
+    const fetchData = useCallback(async () => {
+        const employeeList = await api.getEmployees();
+        setEmployees(employeeList.sort((a, b) => a.lastName.localeCompare(b.lastName)));
     }, []);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    const handleStatusChange = (employeeToUpdate: Employee, newStatus: EmployeeStatus) => {
+    const handleStatusChange = async (employeeToUpdate: Employee, newStatus: EmployeeStatus) => {
         if (!editor) {
             alert("Could not perform action: current user not identified.");
             return;
@@ -112,26 +113,26 @@ const EmployeeManagement: React.FC = () => {
             } else if (newStatus === EmployeeStatus.ACTIVE) {
                 updatedEmployeeData.dateTerminated = undefined;
             }
-            api.updateEmployee(updatedEmployeeData, editor.id);
+            await api.updateEmployee(updatedEmployeeData, editor.id);
             fetchData();
         }
     };
 
-    const handleDelete = (employeeToDelete: Employee) => {
+    const handleDelete = async (employeeToDelete: Employee) => {
         const confirmation = prompt(`This will PERMANENTLY DELETE ${employeeToDelete.firstName} ${employeeToDelete.lastName} and all associated data (attendance, requests, etc.). This action cannot be undone.\n\nTo confirm, please type DELETE below:`);
         if (confirmation === 'DELETE') {
-            api.deleteEmployee(employeeToDelete.id);
+            await api.deleteEmployee(employeeToDelete.id);
             fetchData();
         } else {
             alert('Deletion cancelled.');
         }
     };
 
-    const handleBulkDelete = () => {
+    const handleBulkDelete = async () => {
         if (selectedEmployeeIds.length === 0) return;
         const confirmation = prompt(`This will PERMANENTLY DELETE the ${selectedEmployeeIds.length} selected employees and all their associated data. This action cannot be undone.\n\nTo confirm, please type DELETE below:`);
         if (confirmation === 'DELETE') {
-            api.bulkDeleteEmployees(selectedEmployeeIds);
+            await api.bulkDeleteEmployees(selectedEmployeeIds);
             fetchData();
             setSelectedEmployeeIds([]);
         } else {
@@ -163,12 +164,12 @@ const EmployeeManagement: React.FC = () => {
         }
     };
 
-    const handleBulkAction = (newStatus: EmployeeStatus) => {
+    const handleBulkAction = async (newStatus: EmployeeStatus) => {
         if (!editor || selectedEmployeeIds.length === 0) return;
-        
+
         const action = newStatus === EmployeeStatus.TERMINATED ? 'terminate' : 'reactivate';
         if (window.confirm(`Are you sure you want to ${action} the ${selectedEmployeeIds.length} selected employees?`)) {
-            selectedEmployeeIds.forEach(id => {
+            const updatePromises = selectedEmployeeIds.map(async (id) => {
                 const employee = employees.find(e => e.id === id);
                 if (employee && employee.status !== newStatus) {
                     const updatedEmployeeData = { ...employee, status: newStatus };
@@ -177,9 +178,10 @@ const EmployeeManagement: React.FC = () => {
                     } else if (newStatus === EmployeeStatus.ACTIVE) {
                         updatedEmployeeData.dateTerminated = undefined;
                     }
-                    api.updateEmployee(updatedEmployeeData, editor.id);
+                    await api.updateEmployee(updatedEmployeeData, editor.id);
                 }
             });
+            await Promise.all(updatePromises);
             fetchData();
             setSelectedEmployeeIds([]);
         }

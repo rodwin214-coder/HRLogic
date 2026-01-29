@@ -394,6 +394,242 @@ export const inviteEmployee = async (employeeData: {
     }
 };
 
+export const updateEmployee = async (updatedEmployee: Employee, editorId: string): Promise<Employee> => {
+    try {
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        // Get original employee for audit logging
+        const originalEmployee = await getEmployeeById(updatedEmployee.id);
+
+        // Update employee record
+        const { data, error } = await supabase
+            .from('employees')
+            .update({
+                employee_id: updatedEmployee.employeeId,
+                email: updatedEmployee.email,
+                first_name: updatedEmployee.firstName,
+                middle_name: updatedEmployee.middleName,
+                last_name: updatedEmployee.lastName,
+                address: updatedEmployee.address,
+                birthdate: updatedEmployee.birthdate || null,
+                mobile_number: updatedEmployee.mobileNumber,
+                department: updatedEmployee.department,
+                tin_number: updatedEmployee.tinNumber,
+                sss_number: updatedEmployee.sssNumber,
+                pagibig_number: updatedEmployee.pagibigNumber,
+                philhealth_number: updatedEmployee.philhealthNumber,
+                date_hired: updatedEmployee.dateHired,
+                date_terminated: updatedEmployee.dateTerminated || null,
+                status: updatedEmployee.status,
+                employment_type: updatedEmployee.employmentType,
+                shift_id: updatedEmployee.shiftId || null,
+                work_schedule: updatedEmployee.workSchedule,
+                profile_picture: updatedEmployee.profilePicture,
+                vacation_leave_adjustment: updatedEmployee.vacationLeaveAdjustment || 0,
+                sick_leave_adjustment: updatedEmployee.sickLeaveAdjustment || 0,
+                custom_fields: updatedEmployee.customFields || {},
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', updatedEmployee.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Create audit log if original employee exists
+        if (originalEmployee) {
+            const changes: any[] = [];
+            const auditFields: (keyof Employee)[] = [
+                'employeeId', 'email', 'firstName', 'middleName', 'lastName', 'address',
+                'birthdate', 'mobileNumber', 'department', 'tinNumber', 'sssNumber',
+                'pagibigNumber', 'philhealthNumber', 'dateHired', 'dateTerminated',
+                'status', 'employmentType', 'shiftId', 'workSchedule'
+            ];
+
+            auditFields.forEach(field => {
+                const oldValue = String(originalEmployee[field] ?? '');
+                const newValue = String(updatedEmployee[field] ?? '');
+                if (oldValue !== newValue) {
+                    changes.push({ field, oldValue, newValue });
+                }
+            });
+
+            if (changes.length > 0) {
+                await supabase
+                    .from('audit_logs')
+                    .insert({
+                        company_id: currentCompanyId,
+                        employee_id: updatedEmployee.id,
+                        editor_id: editorId,
+                        changes,
+                    });
+            }
+        }
+
+        // Handle salary history updates
+        if (updatedEmployee.salaryHistory && updatedEmployee.salaryHistory.length > 0) {
+            const latestSalary = updatedEmployee.salaryHistory[0];
+            const originalLatest = originalEmployee?.salaryHistory?.[0];
+
+            // Check if this is a new salary entry
+            if (!originalLatest ||
+                latestSalary.effectiveDate !== originalLatest.effectiveDate ||
+                latestSalary.basicSalary !== originalLatest.basicSalary) {
+                await supabase
+                    .from('salary_history')
+                    .insert({
+                        employee_id: updatedEmployee.id,
+                        effective_date: latestSalary.effectiveDate,
+                        basic_salary: latestSalary.basicSalary,
+                        allowance: latestSalary.allowance || 0,
+                        other_benefits: latestSalary.otherBenefits || 0,
+                    });
+            }
+        }
+
+        return await convertDbEmployeeToEmployee(data);
+    } catch (error: any) {
+        console.error('Error updating employee:', error);
+        throw error;
+    }
+};
+
+export const deleteEmployee = async (employeeId: string): Promise<void> => {
+    try {
+        // Delete user account first (due to foreign key constraint)
+        await supabase
+            .from('user_accounts')
+            .delete()
+            .eq('employee_id', employeeId);
+
+        // Delete employee record (cascading deletes will handle related records)
+        const { error } = await supabase
+            .from('employees')
+            .delete()
+            .eq('id', employeeId);
+
+        if (error) throw error;
+    } catch (error: any) {
+        console.error('Error deleting employee:', error);
+        throw error;
+    }
+};
+
+export const bulkDeleteEmployees = async (employeeIds: string[]): Promise<void> => {
+    try {
+        // Delete all at once
+        await Promise.all(employeeIds.map(id => deleteEmployee(id)));
+    } catch (error: any) {
+        console.error('Error bulk deleting employees:', error);
+        throw error;
+    }
+};
+
+export const bulkImportEmployees = async (csvData: string): Promise<{ successCount: number, errorCount: number, errors: string[] }> => {
+    try {
+        if (!currentCompanyId) {
+            return { successCount: 0, errorCount: 1, errors: ['Company not found. Please log in again.'] };
+        }
+
+        const lines = csvData.split('\n').filter(line => line.trim() !== '');
+        if (lines.length < 2) {
+            return { successCount: 0, errorCount: 1, errors: ['CSV file is empty or has no data rows.'] };
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim());
+        const requiredHeaders = ['firstName', 'lastName', 'email'];
+        for (const required of requiredHeaders) {
+            if (!headers.includes(required)) {
+                return { successCount: 0, errorCount: 1, errors: [`Missing required header: ${required}`] };
+            }
+        }
+
+        const results = { successCount: 0, errorCount: 0, errors: [] as string[] };
+        const defaultPassword = 'password123';
+        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim());
+            const entry = headers.reduce((obj, header, index) => {
+                obj[header] = values[index];
+                return obj;
+            }, {} as {[key: string]: string});
+
+            if (!entry.email || !/^\S+@\S+\.\S+$/.test(entry.email)) {
+                results.errorCount++;
+                results.errors.push(`Row ${i + 1}: Invalid email format.`);
+                continue;
+            }
+
+            // Check if email already exists
+            const { data: existingAccount } = await supabase
+                .from('user_accounts')
+                .select('email')
+                .eq('company_id', currentCompanyId)
+                .eq('email', entry.email)
+                .maybeSingle();
+
+            if (existingAccount) {
+                results.errorCount++;
+                results.errors.push(`Row ${i + 1}: Email ${entry.email} already exists.`);
+                continue;
+            }
+
+            try {
+                // Generate employee ID
+                const generatedEmployeeId = `emp${Date.now()}_${i}`;
+
+                // Create employee record
+                const { data: newEmployee, error: employeeError } = await supabase
+                    .from('employees')
+                    .insert([{
+                        company_id: currentCompanyId,
+                        employee_id: generatedEmployeeId,
+                        email: entry.email,
+                        first_name: entry.firstName || '',
+                        middle_name: entry.middleName || null,
+                        last_name: entry.lastName || '',
+                        department: entry.department || '',
+                        address: entry.address || null,
+                        mobile_number: entry.mobileNumber || null,
+                        date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
+                        status: EmployeeStatus.ACTIVE,
+                        employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
+                    }])
+                    .select()
+                    .single();
+
+                if (employeeError) throw employeeError;
+
+                // Create user account
+                const { error: accountError } = await supabase
+                    .from('user_accounts')
+                    .insert([{
+                        company_id: currentCompanyId,
+                        employee_id: newEmployee.id,
+                        email: entry.email,
+                        password_hash: passwordHash,
+                        role: UserRole.EMPLOYEE,
+                    }]);
+
+                if (accountError) throw accountError;
+
+                results.successCount++;
+            } catch (error: any) {
+                results.errorCount++;
+                results.errors.push(`Row ${i + 1}: ${error.message}`);
+            }
+        }
+
+        return results;
+    } catch (error: any) {
+        console.error('Error bulk importing employees:', error);
+        return { successCount: 0, errorCount: 1, errors: [error.message] };
+    }
+};
+
 // Company Profile Functions
 export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
     try {
