@@ -338,6 +338,7 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                         {allTodaysSessions.map((session, index) => {
                             const isActiveSession = session.id === todaysRecord?.id && !session.clockOutTime;
+                            const isFirstSession = index === 0;
                             return (
                                 <div
                                     key={session.id}
@@ -345,11 +346,22 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs font-semibold text-slate-500">Session {index + 1}</span>
-                                        {isActiveSession && (
-                                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
-                                                Active
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {isFirstSession && session.status && (
+                                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                                    session.status === 'On Time'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {session.status}
+                                                </span>
+                                            )}
+                                            {isActiveSession && (
+                                                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
+                                                    Active
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="space-y-1 text-sm">
                                         <div className="flex justify-between">

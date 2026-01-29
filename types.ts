@@ -171,6 +171,7 @@ export interface AttendanceRecord {
     clockOutLocation?: GeolocationData;
     endOfDayNotes?: string;
     manualEntryReason?: string; // To store reason for manual entry/edit
+    status?: 'On Time' | 'Late'; // Only for first clock-in of the day
 }
 
 export interface Holiday {

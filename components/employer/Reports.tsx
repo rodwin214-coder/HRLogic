@@ -222,7 +222,7 @@ export const Reports: React.FC = () => {
 
         const escapeCSV = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
 
-        const standardHeader = "Report Type,Employee,Date,Clock In Time,Clock Out Time,Details,Hours,Status\n";
+        const standardHeader = "Report Type,Employee,Date,Clock In Time,Attendance Status,Clock Out Time,Details,Hours,Status\n";
 
         switch(exportType) {
             case 'attendance':
@@ -233,13 +233,14 @@ export const Reports: React.FC = () => {
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
                     const clockIn = new Date(record.clockInTime).toLocaleTimeString();
+                    const attendanceStatus = record.status || '-';
                     const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '';
                     const locationInfo = record.clockInLocation
                         ? `Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
                         : '';
                     const details = locationInfo + (record.manualEntryReason ? ` | Manual Entry: ${record.manualEntryReason}` : '');
                     const { totalHours, status } = calculateStatus(record);
-                    csvContent += ["Attendance", empName, date, clockIn, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
+                    csvContent += ["Attendance", empName, date, clockIn, attendanceStatus, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
                 });
                 break;
             case 'requests':
@@ -255,13 +256,13 @@ export const Reports: React.FC = () => {
                         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
                         const hours = days * 8;
                         const details = `${req.leaveType} | ${req.reason || ''}`;
-                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '-', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
                     } else if (req.type === RequestType.OVERTIME || req.type === RequestType.UNDERTIME) {
                         const details = req.reason || '';
-                        csvContent += [req.type, empName, req.date, '', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, req.date, '', '-', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
                     } else {
                         const details = req.reason || 'Information change request';
-                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '-', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
                     }
                 });
                 break;
@@ -269,7 +270,7 @@ export const Reports: React.FC = () => {
                  fileName = `absences_${startDate}_to_${endDate}.csv`;
                  csvContent += standardHeader;
                  filteredAbsences.forEach(({employee, date}) => {
-                     csvContent += ["Absence", `${employee.firstName} ${employee.lastName}`, date, '', '', 'No clock-in or approved leave', '', "Absent"].map(escapeCSV).join(",") + "\n";
+                     csvContent += ["Absence", `${employee.firstName} ${employee.lastName}`, date, '', '-', '', 'No clock-in or approved leave', '', "Absent"].map(escapeCSV).join(",") + "\n";
                  });
                  break;
             case 'all':
@@ -281,13 +282,14 @@ export const Reports: React.FC = () => {
                     const empName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
                     const date = new Date(record.clockInTime).toLocaleDateString();
                     const clockIn = new Date(record.clockInTime).toLocaleTimeString();
+                    const attendanceStatus = record.status || '-';
                     const clockOut = record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '';
                     const locationInfo = record.clockInLocation
                         ? `Location: (${record.clockInLocation.latitude.toFixed(5)}, ${record.clockInLocation.longitude.toFixed(5)}${record.clockInLocation.accuracy ? `, ±${record.clockInLocation.accuracy.toFixed(0)}m` : ''})`
                         : '';
                     const details = locationInfo + (record.manualEntryReason ? ` | Manual Entry: ${record.manualEntryReason}` : '');
                     const { totalHours, status } = calculateStatus(record);
-                    csvContent += ["Attendance", empName, date, clockIn, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
+                    csvContent += ["Attendance", empName, date, clockIn, attendanceStatus, clockOut, details, totalHours, status].map(escapeCSV).join(",") + "\n";
                 });
 
                 filteredRequests.forEach(req => {
@@ -300,13 +302,13 @@ export const Reports: React.FC = () => {
                         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
                         const hours = days * 8;
                         const details = `${req.leaveType} | ${req.reason || ''}`;
-                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, `${req.startDate} to ${req.endDate}`, '', '-', '', details, hours, req.status].map(escapeCSV).join(",") + "\n";
                     } else if (req.type === RequestType.OVERTIME || req.type === RequestType.UNDERTIME) {
                         const details = req.reason || '';
-                        csvContent += [req.type, empName, req.date, '', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, req.date, '', '-', '', details, req.hours, req.status].map(escapeCSV).join(",") + "\n";
                     } else {
                         const details = req.reason || 'Information change request';
-                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
+                        csvContent += [req.type, empName, new Date(req.dateFiled).toLocaleDateString(), '', '-', '', details, '', req.status].map(escapeCSV).join(",") + "\n";
                     }
                 });
 
@@ -420,6 +422,7 @@ export const Reports: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock In</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attendance</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock Out</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Hours</th>
@@ -437,6 +440,19 @@ export const Reports: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleDateString()}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleTimeString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        {record.status ? (
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                record.status === 'On Time'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {record.status}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-400 text-xs">-</span>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {record.clockInLocation ? (
                                             <div className="flex flex-col gap-1">

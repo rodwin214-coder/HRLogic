@@ -914,6 +914,7 @@ export const getAttendance = async (): Promise<AttendanceRecord[]> => {
             clockOutLocation: a.clock_out_location,
             endOfDayNotes: a.end_of_day_notes,
             manualEntryReason: a.manual_entry_reason,
+            status: a.status,
         }));
     } catch (error) {
         console.error('Error fetching attendance:', error);
@@ -950,6 +951,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
                 clockOutLocation: activeSession.clock_out_location,
                 endOfDayNotes: activeSession.end_of_day_notes,
                 manualEntryReason: activeSession.manual_entry_reason,
+                status: activeSession.status,
             };
         }
 
@@ -982,6 +984,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
             clockOutLocation: data.clock_out_location,
             endOfDayNotes: data.end_of_day_notes,
             manualEntryReason: data.manual_entry_reason,
+            status: data.status,
         };
     } catch (error) {
         console.error('Error fetching today\'s attendance:', error);
@@ -1018,6 +1021,7 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
             clockOutLocation: record.clock_out_location,
             endOfDayNotes: record.end_of_day_notes,
             manualEntryReason: record.manual_entry_reason,
+            status: record.status,
         }));
     } catch (error) {
         console.error('Error fetching all today\'s attendance:', error);
@@ -1027,8 +1031,9 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
 
 export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: string): Promise<AttendanceRecord> => {
     await ensureUserContext();
-    // Check if there's an active session (clocked in but not clocked out)
     const today = new Date().toISOString().split('T')[0];
+
+    // Check if there's an active session (clocked in but not clocked out)
     const { data: activeSession } = await supabase
         .from('attendance_records')
         .select('id')
@@ -1042,6 +1047,51 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
         throw new Error('You have an active session. Please clock out before starting a new session.');
     }
 
+    // Check if this is the first clock-in of the day
+    const { data: todaySessions, error: sessionError } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('employee_id', record.employeeId)
+        .gte('clock_in_time', `${today}T00:00:00Z`)
+        .lte('clock_in_time', `${today}T23:59:59Z`);
+
+    const isFirstClockIn = !todaySessions || todaySessions.length === 0;
+    let status: 'On Time' | 'Late' | undefined = undefined;
+
+    // Calculate status only for first clock-in
+    if (isFirstClockIn) {
+        // Get employee's shift information
+        const { data: employee, error: empError } = await supabase
+            .from('employees')
+            .select('shift_id')
+            .eq('id', record.employeeId)
+            .maybeSingle();
+
+        if (!empError && employee && employee.shift_id) {
+            const { data: shift, error: shiftError } = await supabase
+                .from('shifts')
+                .select('start_time')
+                .eq('id', employee.shift_id)
+                .maybeSingle();
+
+            if (!shiftError && shift && shift.start_time) {
+                // Parse clock-in time and shift start time
+                const clockInTime = new Date(record.clockInTime);
+                const clockInHours = clockInTime.getHours();
+                const clockInMinutes = clockInTime.getMinutes();
+
+                const [shiftHours, shiftMinutes] = shift.start_time.split(':').map(Number);
+
+                // Calculate total minutes for comparison
+                const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
+                const shiftTotalMinutes = shiftHours * 60 + shiftMinutes;
+
+                // Consider on time if within 5 minutes of shift start
+                status = clockInTotalMinutes <= (shiftTotalMinutes + 5) ? 'On Time' : 'Late';
+            }
+        }
+    }
+
     const { data, error } = await supabase
         .from('attendance_records')
         .insert([{
@@ -1050,6 +1100,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
             clock_in_time: record.clockInTime,
             clock_in_photo: record.clockInPhoto,
             clock_in_location: record.clockInLocation,
+            status: status,
         }])
         .select()
         .single();
@@ -1067,6 +1118,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
         clockOutTime: data.clock_out_time,
         clockOutPhoto: data.clock_out_photo,
         clockOutLocation: data.clock_out_location,
+        status: data.status,
     };
 };
 
@@ -1115,6 +1167,7 @@ export const clockOut = async (
             clockOutPhoto: data.clock_out_photo,
             clockOutLocation: data.clock_out_location,
             endOfDayNotes: data.end_of_day_notes,
+            status: data.status,
         };
     } catch (error) {
         console.error('Error clocking out:', error);
