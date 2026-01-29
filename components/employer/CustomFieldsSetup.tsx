@@ -52,31 +52,41 @@ const CustomFieldsSetup: React.FC = () => {
         window.scrollTo(0, 0);
     };
 
-    const handleDelete = (defId: string) => {
+    const handleDelete = async (defId: string) => {
         if (window.confirm('Are you sure you want to delete this custom field? This will not remove existing data from employees, but the field will no longer be visible or editable.')) {
-            api.deleteCustomFieldDefinition(defId);
-            fetchData();
+            try {
+                await api.deleteCustomFieldDefinition(defId);
+                await fetchData();
+            } catch (error) {
+                console.error('Failed to delete custom field:', error);
+                alert('Failed to delete custom field. Please try again.');
+            }
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!validate()) return;
-        
+
         const defData = {
             name,
             type,
             options: type === CustomFieldType.DROPDOWN ? options.split(',').map(opt => opt.trim()) : undefined,
         };
 
-        if (editingDefId) {
-            api.updateCustomFieldDefinition({ ...defData, id: editingDefId });
-        } else {
-            api.addCustomFieldDefinition(defData);
+        try {
+            if (editingDefId) {
+                await api.updateCustomFieldDefinition({ ...defData, id: editingDefId });
+            } else {
+                await api.addCustomFieldDefinition(defData);
+            }
+
+            resetForm();
+            await fetchData();
+        } catch (error) {
+            console.error('Failed to save custom field:', error);
+            alert('Failed to save custom field. Please try again.');
         }
-        
-        resetForm();
-        fetchData();
     };
 
     return (
