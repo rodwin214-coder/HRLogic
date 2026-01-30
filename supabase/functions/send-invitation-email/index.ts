@@ -24,6 +24,33 @@ Deno.serve(async (req: Request) => {
   try {
     const { employeeEmail, employeeName, companyName, companyCode }: InvitationEmailRequest = await req.json();
 
+    // Get Resend API key from environment
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+
+    if (!resendApiKey) {
+      console.warn('RESEND_API_KEY not configured. Email will be logged but not sent.');
+      console.log('=== INVITATION EMAIL (NOT SENT) ===');
+      console.log('To:', employeeEmail);
+      console.log('Subject:', `Welcome to ${companyName} - Your Account Has Been Created`);
+      console.log('Company:', companyName);
+      console.log('Company Code:', companyCode);
+      console.log('===================================');
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Email service not configured. Please set up Resend API key.',
+          logged: true,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     const emailSubject = `Welcome to ${companyName} - Your Account Has Been Created`;
     const emailBody = `
 <!DOCTYPE html>
@@ -64,18 +91,22 @@ Deno.serve(async (req: Request) => {
           <div class="credential-label">Email:</div>
           <div class="credential-value">${employeeEmail}</div>
         </div>
+
+        <div class="credential-item">
+          <div class="credential-label">Temporary Password:</div>
+          <div class="credential-value">qwerty123</div>
+        </div>
       </div>
 
       <div class="warning">
-        <strong>⚠️ Important:</strong> Please contact your employer to obtain your temporary password. For security reasons, passwords are not sent via email.
+        <strong>⚠️ Important:</strong> Please change your password immediately after your first login for security purposes.
       </div>
 
       <p><strong>What to do next:</strong></p>
       <ol>
-        <li>Contact your employer to get your temporary password</li>
         <li>Visit the WorkLogix login page</li>
-        <li>Enter your company code, email, and the temporary password</li>
-        <li>Complete your profile and change your password after logging in</li>
+        <li>Enter your company code, email, and the temporary password above</li>
+        <li>Complete your profile and change your password</li>
       </ol>
 
       <p>If you have any questions or need assistance, please contact your employer or system administrator.</p>
@@ -90,22 +121,35 @@ Deno.serve(async (req: Request) => {
 </html>
     `.trim();
 
-    console.log('=== INVITATION EMAIL ===');
-    console.log('To:', employeeEmail);
-    console.log('Subject:', emailSubject);
-    console.log('Company:', companyName);
-    console.log('Company Code:', companyCode);
-    console.log('========================');
+    // Send email using Resend
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'WorkLogix <onboarding@resend.dev>',
+        to: [employeeEmail],
+        subject: emailSubject,
+        html: emailBody,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.json();
+      throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
+    }
+
+    const resendData = await resendResponse.json();
+
+    console.log('Email sent successfully via Resend:', resendData);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Invitation email logged successfully',
-        email: {
-          to: employeeEmail,
-          subject: emailSubject,
-          companyCode: companyCode,
-        }
+        message: 'Invitation email sent successfully',
+        emailId: resendData.id,
       }),
       {
         headers: {
@@ -115,7 +159,7 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error('Error processing invitation email:', error);
+    console.error('Error sending invitation email:', error);
     return new Response(
       JSON.stringify({
         success: false,

@@ -24,6 +24,33 @@ Deno.serve(async (req: Request) => {
   try {
     const { employeeEmail, employeeName, companyName, companyCode }: PasswordResetEmailRequest = await req.json();
 
+    // Get Resend API key from environment
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+
+    if (!resendApiKey) {
+      console.warn('RESEND_API_KEY not configured. Email will be logged but not sent.');
+      console.log('=== PASSWORD RESET EMAIL (NOT SENT) ===');
+      console.log('To:', employeeEmail);
+      console.log('Subject:', `Password Reset Request - ${companyName}`);
+      console.log('Company:', companyName);
+      console.log('Company Code:', companyCode);
+      console.log('========================================');
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Email service not configured. Please set up Resend API key.',
+          logged: true,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
     const emailSubject = `Password Reset Request - ${companyName}`;
     const emailBody = `
 <!DOCTYPE html>
@@ -94,22 +121,35 @@ Deno.serve(async (req: Request) => {
 </html>
     `.trim();
 
-    console.log('=== PASSWORD RESET EMAIL ===');
-    console.log('To:', employeeEmail);
-    console.log('Subject:', emailSubject);
-    console.log('Company:', companyName);
-    console.log('Company Code:', companyCode);
-    console.log('============================');
+    // Send email using Resend
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'WorkLogix <onboarding@resend.dev>',
+        to: [employeeEmail],
+        subject: emailSubject,
+        html: emailBody,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorData = await resendResponse.json();
+      throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
+    }
+
+    const resendData = await resendResponse.json();
+
+    console.log('Password reset email sent successfully via Resend:', resendData);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Password reset email logged successfully',
-        email: {
-          to: employeeEmail,
-          subject: emailSubject,
-          companyCode: companyCode,
-        }
+        message: 'Password reset email sent successfully',
+        emailId: resendData.id,
       }),
       {
         headers: {
@@ -119,7 +159,7 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error('Error processing password reset email:', error);
+    console.error('Error sending password reset email:', error);
     return new Response(
       JSON.stringify({
         success: false,

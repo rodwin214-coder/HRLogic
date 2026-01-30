@@ -120,8 +120,8 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
 
                 {apiError && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">{apiError}</p>}
 
-                <div className="text-xs text-slate-500 bg-slate-100 p-2 rounded-md">
-                    <strong>Note:</strong> Email invitations are sent via EmailJS. To enable this, you must add your free API keys to <code>services/mockApi.ts</code> and <code>index.html</code>.
+                <div className="text-xs text-slate-500 bg-blue-50 p-3 rounded-md border border-blue-200">
+                    <strong>Note:</strong> An invitation email will be sent to the employee with their login credentials and temporary password.
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t">
