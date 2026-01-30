@@ -35,7 +35,8 @@ export const Reports: React.FC = () => {
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [recordToEdit, setRecordToEdit] = useState<AttendanceRecord | undefined>(undefined);
-    
+    const [selectedImage, setSelectedImage] = useState<{ src: string; label: string } | null>(null);
+
     // Payroll state
     const [payrollSummary, setPayrollSummary] = useState<PayrollSummaryItem[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -457,6 +458,7 @@ export const Reports: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock In</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attendance</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Images</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock Out</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Hours</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -510,6 +512,64 @@ export const Reports: React.FC = () => {
                                             </div>
                                         ) : 'N/A'}
                                     </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <div className="flex gap-2">
+                                            {record.clockInPhoto ? (
+                                                <div className="flex flex-col items-center">
+                                                    <button
+                                                        onClick={() => setSelectedImage({ src: record.clockInPhoto!, label: 'Clock In Photo' })}
+                                                        className="relative group"
+                                                    >
+                                                        <img
+                                                            src={record.clockInPhoto}
+                                                            alt="Clock In"
+                                                            className="w-12 h-12 object-cover rounded border border-gray-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded transition-opacity flex items-center justify-center">
+                                                            <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                            </svg>
+                                                        </div>
+                                                    </button>
+                                                    <span className="text-xs text-gray-500 mt-1">In</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="w-12 h-12 bg-gray-100 rounded border border-gray-300 flex items-center justify-center">
+                                                        <span className="text-xs text-gray-400">N/A</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-500 mt-1">In</span>
+                                                </div>
+                                            )}
+                                            {record.clockOutPhoto ? (
+                                                <div className="flex flex-col items-center">
+                                                    <button
+                                                        onClick={() => setSelectedImage({ src: record.clockOutPhoto!, label: 'Clock Out Photo' })}
+                                                        className="relative group"
+                                                    >
+                                                        <img
+                                                            src={record.clockOutPhoto}
+                                                            alt="Clock Out"
+                                                            className="w-12 h-12 object-cover rounded border border-gray-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded transition-opacity flex items-center justify-center">
+                                                            <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                            </svg>
+                                                        </div>
+                                                    </button>
+                                                    <span className="text-xs text-gray-500 mt-1">Out</span>
+                                                </div>
+                                            ) : record.clockOutTime ? (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="w-12 h-12 bg-gray-100 rounded border border-gray-300 flex items-center justify-center">
+                                                        <span className="text-xs text-gray-400">N/A</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-500 mt-1">Out</span>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '---'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{totalHours}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -526,7 +586,7 @@ export const Reports: React.FC = () => {
                                 </tr>
                                )
                            }) : (
-                                <tr><td colSpan={9} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
+                                <tr><td colSpan={11} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
                            )}
                         </tbody>
                     </table>
@@ -600,11 +660,36 @@ export const Reports: React.FC = () => {
             </div>
             
             {isManualModalOpen && (
-                <ManualAttendanceModal 
+                <ManualAttendanceModal
                     onClose={() => setIsManualModalOpen(false)}
                     onSuccess={handleModalSuccess}
                     recordToEdit={recordToEdit}
                 />
+            )}
+
+            {selectedImage && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={() => setSelectedImage(null)}>
+                    <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 bg-slate-100 border-b">
+                            <h3 className="text-lg font-semibold text-slate-800">{selectedImage.label}</h3>
+                            <button
+                                onClick={() => setSelectedImage(null)}
+                                className="text-slate-600 hover:text-slate-900 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-auto max-h-[calc(90vh-80px)]">
+                            <img
+                                src={selectedImage.src}
+                                alt={selectedImage.label}
+                                className="w-full h-auto rounded"
+                            />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
