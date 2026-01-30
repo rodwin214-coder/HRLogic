@@ -316,7 +316,10 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
     };
 
     const handleDeleteRecord = async (recordId: string) => {
-        if (!editor) return;
+        if (!editor) {
+            alert('Error: User not found. Please refresh the page.');
+            return;
+        }
 
         if (!window.confirm('Are you sure you want to delete this salary record?')) {
             return;
@@ -459,14 +462,16 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                                         {isEditing ? (
                                             <div className="flex gap-2 justify-end">
                                                 <button
+                                                    type="button"
                                                     onClick={handleEditRecord}
-                                                    className="text-green-600 hover:text-green-900 font-medium"
+                                                    className="text-green-600 hover:text-green-900 font-medium px-2 py-1"
                                                 >
                                                     Save
                                                 </button>
                                                 <button
+                                                    type="button"
                                                     onClick={cancelEditing}
-                                                    className="text-gray-600 hover:text-gray-900 font-medium"
+                                                    className="text-gray-600 hover:text-gray-900 font-medium px-2 py-1"
                                                 >
                                                     Cancel
                                                 </button>
@@ -474,14 +479,24 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                                         ) : (
                                             <div className="flex gap-2 justify-end">
                                                 <button
-                                                    onClick={() => startEditing(record)}
-                                                    className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        startEditing(record);
+                                                    }}
+                                                    className="text-indigo-600 hover:text-indigo-900 font-medium px-2 py-1"
                                                 >
                                                     Edit
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteRecord(record.id)}
-                                                    className="text-red-600 hover:text-red-900 font-medium"
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleDeleteRecord(record.id);
+                                                    }}
+                                                    className="text-red-600 hover:text-red-900 font-medium px-2 py-1"
                                                 >
                                                     Delete
                                                 </button>
