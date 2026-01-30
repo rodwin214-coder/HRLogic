@@ -15,18 +15,50 @@ const ProfileField: React.FC<{label: string, value?: string | number | boolean}>
     </div>
 );
 
-const EditField: React.FC<{label: string, name: keyof Employee, value?: any, type?: string, children?: React.ReactNode}> = ({label, name, value, type="text", children}) => (
-     <div>
-        <label className="block text-xs font-medium text-slate-700">{label}</label>
-        {type === 'select' ? (
-            <select name={name} value={value || ''} onChange={() => {}} className="mt-1 input-field text-sm">
-                {children}
-            </select>
-        ) : (
-            <input name={name} value={value || ''} onChange={() => {}} type={type} className="mt-1 input-field text-sm" />
-        )}
-    </div>
-);
+const ScopedEditField: React.FC<{
+    label: string,
+    name: keyof Employee,
+    value?: any,
+    type?: string,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void,
+    children?: React.ReactNode
+}> = React.memo(({label, name, value, type="text", onChange, children}) => (
+    <div>
+       <label className="block text-xs font-medium text-slate-700">{label}</label>
+       {type === 'select' ? (
+           <select name={name} value={value || ''} onChange={onChange} className="mt-1 input-field text-sm">
+               {children}
+           </select>
+       ) : (
+           <input name={name} value={value || ''} onChange={onChange} type={type} className="mt-1 input-field text-sm" />
+       )}
+   </div>
+));
+
+const CustomEditField: React.FC<{
+    def: CustomFieldDefinition,
+    value: any,
+    onChange: (fieldId: string, value: any) => void
+}> = React.memo(({def, value, onChange}) => {
+    return (
+         <div>
+            <label className="block text-xs font-medium text-slate-700">{def.name}</label>
+            {def.type === CustomFieldType.DROPDOWN ? (
+                <select value={String(value)} onChange={(e) => onChange(def.id, e.target.value)} className="mt-1 input-field text-sm">
+                    <option value="">Select...</option>
+                    {def.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+            ) : (
+                <input
+                    type={def.type.toLowerCase()}
+                    value={String(value)}
+                    onChange={(e) => onChange(def.id, e.target.value)}
+                    className="mt-1 input-field text-sm"
+                />
+            )}
+        </div>
+    )
+});
 
 // --- Profile Tab ---
 const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ employee, onUpdate }) => {
@@ -97,42 +129,6 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
             }
         }
     }
-    
-    // Re-define EditField for this component's scope with a working onChange
-    const ScopedEditField: React.FC<{label: string, name: keyof Employee, value?: any, type?: string, children?: React.ReactNode}> = ({label, name, value, type="text", children}) => (
-        <div>
-           <label className="block text-xs font-medium text-slate-700">{label}</label>
-           {type === 'select' ? (
-               <select name={name} value={value || ''} onChange={handleChange} className="mt-1 input-field text-sm">
-                   {children}
-               </select>
-           ) : (
-               <input name={name} value={value || ''} onChange={handleChange} type={type} className="mt-1 input-field text-sm" />
-           )}
-       </div>
-   );
-
-    const CustomEditField: React.FC<{def: CustomFieldDefinition}> = ({def}) => {
-        const value = formData.customFields?.[def.id] || '';
-        return (
-             <div>
-                <label className="block text-xs font-medium text-slate-700">{def.name}</label>
-                {def.type === CustomFieldType.DROPDOWN ? (
-                    <select value={String(value)} onChange={(e) => handleCustomFieldChange(def.id, e.target.value)} className="mt-1 input-field text-sm">
-                        <option value="">Select...</option>
-                        {def.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                    </select>
-                ) : (
-                    <input 
-                        type={def.type.toLowerCase()} 
-                        value={String(value)}
-                        onChange={(e) => handleCustomFieldChange(def.id, e.target.value)}
-                        className="mt-1 input-field text-sm"
-                    />
-                )}
-            </div>
-        )
-    }
 
     return (
         <div className="space-y-6">
@@ -151,27 +147,27 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
                     {/* Personal Information */}
                     <h4 className="md:col-span-3 text-md font-semibold text-slate-600 border-b pb-1">Personal Information</h4>
-                    <ScopedEditField label="First Name" name="firstName" value={formData.firstName} />
-                    <ScopedEditField label="Middle Name" name="middleName" value={formData.middleName} />
-                    <ScopedEditField label="Last Name" name="lastName" value={formData.lastName} />
-                    <ScopedEditField label="Birthdate" name="birthdate" value={formData.birthdate} type="date"/>
-                    <ScopedEditField label="Mobile Number" name="mobileNumber" value={formData.mobileNumber} />
+                    <ScopedEditField label="First Name" name="firstName" value={formData.firstName} onChange={handleChange} />
+                    <ScopedEditField label="Middle Name" name="middleName" value={formData.middleName} onChange={handleChange} />
+                    <ScopedEditField label="Last Name" name="lastName" value={formData.lastName} onChange={handleChange} />
+                    <ScopedEditField label="Birthdate" name="birthdate" value={formData.birthdate} type="date" onChange={handleChange} />
+                    <ScopedEditField label="Mobile Number" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} />
                     <div className="md:col-span-3">
-                        <ScopedEditField label="Address" name="address" value={formData.address} />
+                        <ScopedEditField label="Address" name="address" value={formData.address} onChange={handleChange} />
                     </div>
 
                     {/* Employment Information */}
                     <h4 className="md:col-span-3 text-md font-semibold text-slate-600 border-b pb-1 mt-4">Employment Information</h4>
-                    <ScopedEditField label="Date Hired" name="dateHired" value={formData.dateHired} type="date" />
-                    <ScopedEditField label="Employment Type" name="employmentType" value={formData.employmentType} type="select">
+                    <ScopedEditField label="Date Hired" name="dateHired" value={formData.dateHired} type="date" onChange={handleChange} />
+                    <ScopedEditField label="Employment Type" name="employmentType" value={formData.employmentType} type="select" onChange={handleChange}>
                         {Object.values(EmploymentType).map(et => ( <option key={et} value={et}>{et}</option> ))}
                     </ScopedEditField>
-                    <ScopedEditField label="Department" name="department" value={formData.department} />
-                    <ScopedEditField label="Work Schedule" name="workSchedule" value={formData.workSchedule} type="select">
+                    <ScopedEditField label="Department" name="department" value={formData.department} onChange={handleChange} />
+                    <ScopedEditField label="Work Schedule" name="workSchedule" value={formData.workSchedule} type="select" onChange={handleChange}>
                         <option value="">Use Company Default</option>
                         {Object.values(WorkSchedule).map(ws => ( <option key={ws} value={ws}>{ws}</option> ))}
                     </ScopedEditField>
-                    <ScopedEditField label="Work Shift" name="shiftId" value={formData.shiftId} type="select">
+                    <ScopedEditField label="Work Shift" name="shiftId" value={formData.shiftId} type="select" onChange={handleChange}>
                         <option value="">No shift assigned</option>
                         {shifts.map(shift => (
                             <option key={shift.id} value={shift.id}>
@@ -182,14 +178,14 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
 
                     {/* Government IDs */}
                     <h4 className="md:col-span-3 text-md font-semibold text-slate-600 border-b pb-1 mt-4">Government IDs</h4>
-                    <ScopedEditField label="TIN #" name="tinNumber" value={formData.tinNumber} />
-                    <ScopedEditField label="SSS #" name="sssNumber" value={formData.sssNumber} />
-                    <ScopedEditField label="Pag-ibig #" name="pagibigNumber" value={formData.pagibigNumber} />
-                    <ScopedEditField label="PhilHealth #" name="philhealthNumber" value={formData.philhealthNumber} />
+                    <ScopedEditField label="TIN #" name="tinNumber" value={formData.tinNumber} onChange={handleChange} />
+                    <ScopedEditField label="SSS #" name="sssNumber" value={formData.sssNumber} onChange={handleChange} />
+                    <ScopedEditField label="Pag-ibig #" name="pagibigNumber" value={formData.pagibigNumber} onChange={handleChange} />
+                    <ScopedEditField label="PhilHealth #" name="philhealthNumber" value={formData.philhealthNumber} onChange={handleChange} />
 
                     {/* Custom Fields */}
                     {customFieldDefs.length > 0 && <h4 className="md:col-span-3 text-md font-semibold text-slate-600 border-b pb-1 mt-4">Additional Information</h4>}
-                    {customFieldDefs.map(def => <CustomEditField key={def.id} def={def} />)}
+                    {customFieldDefs.map(def => <CustomEditField key={def.id} def={def} value={formData.customFields?.[def.id] || ''} onChange={handleCustomFieldChange} />)}
                 </div>
             ) : (
                  <div className="space-y-6">
