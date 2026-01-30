@@ -1515,6 +1515,51 @@ export const addHoliday = async (holiday: Omit<Holiday, 'id'>): Promise<Holiday>
     }
 };
 
+export const updateHoliday = async (holiday: Holiday): Promise<Holiday> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('holidays')
+            .update({
+                name: holiday.name,
+                date: holiday.date,
+                country: holiday.country || 'PH',
+                holiday_type: holiday.type || 'Regular',
+            })
+            .eq('id', holiday.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: data.id,
+            name: data.name,
+            date: data.date,
+            country: data.country || 'PH',
+            type: data.holiday_type || 'Regular',
+        };
+    } catch (error) {
+        console.error('Error updating holiday:', error);
+        throw error;
+    }
+};
+
+export const deleteHoliday = async (holidayId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('holidays')
+            .delete()
+            .eq('id', holidayId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting holiday:', error);
+        throw error;
+    }
+};
+
 export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
     console.warn('changePassword: Not yet implemented in Supabase');
     return { success: false, message: 'Password change not yet implemented' };
