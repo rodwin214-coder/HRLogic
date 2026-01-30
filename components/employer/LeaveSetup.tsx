@@ -72,12 +72,17 @@ const LeaveSetup: React.FC = () => {
         setPolicy({ ...policy, [name]: newValue });
     };
 
-    const handleSave = (e: React.FormEvent) => {
+    const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (policy && validate()) {
-            api.updateLeavePolicy(policy);
-            setIsSaved(true);
-            setTimeout(() => setIsSaved(false), 3000); // Hide message after 3 seconds
+            try {
+                await api.updateLeavePolicy(policy);
+                setIsSaved(true);
+                setTimeout(() => setIsSaved(false), 3000); // Hide message after 3 seconds
+            } catch (error) {
+                console.error('Error saving leave policy:', error);
+                alert('Failed to save leave policy. Please try again.');
+            }
         }
     };
     

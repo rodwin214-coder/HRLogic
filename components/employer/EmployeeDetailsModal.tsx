@@ -68,15 +68,20 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
         }));
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!editor) return;
-        const dataToSave = {
-            ...formData,
-            workSchedule: formData.workSchedule || undefined
-        };
-        api.updateEmployee(dataToSave, editor.id);
-        onUpdate();
-        setIsEditing(false);
+        try {
+            const dataToSave = {
+                ...formData,
+                workSchedule: formData.workSchedule || undefined
+            };
+            await api.updateEmployee(dataToSave, editor.id);
+            await onUpdate();
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Error updating employee:', error);
+            alert('Failed to update employee. Please try again.');
+        }
     };
 
     const handleResetPassword = () => {
@@ -435,14 +440,19 @@ const LeaveBalanceTab: React.FC<{ employee: Employee, onUpdate: () => void }> = 
         calculate();
     }, [calculate, employee]); // Recalculate if employee data changes
     
-    const handleSaveAdjustment = (adjustments: { vacation: number; sick: number }, reason: string) => {
+    const handleSaveAdjustment = async (adjustments: { vacation: number; sick: number }, reason: string) => {
         if (!editor) {
             alert("Error: Current user not identified.");
             return;
         }
-        api.adjustLeaveBalance(employee.id, adjustments, reason, editor.id);
-        setIsAdjustmentModalOpen(false);
-        onUpdate(); // This will trigger a re-fetch in the parent, which re-renders this component with fresh data
+        try {
+            await api.adjustLeaveBalance(employee.id, adjustments, reason, editor.id);
+            setIsAdjustmentModalOpen(false);
+            await onUpdate(); // This will trigger a re-fetch in the parent, which re-renders this component with fresh data
+        } catch (error) {
+            console.error('Error adjusting leave balance:', error);
+            alert('Failed to adjust leave balance. Please try again.');
+        }
     };
     
     if(!balance) return <p>Calculating leave balance...</p>;

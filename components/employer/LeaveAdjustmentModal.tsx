@@ -41,34 +41,40 @@ const LeaveAdjustmentModal: React.FC<LeaveAdjustmentModalProps> = ({ employee, o
     return (
         <Modal isOpen={true} onClose={onClose} title={`Adjust Leave for ${employee.firstName} ${employee.lastName}`}>
             <div className="space-y-4">
-                <p className="text-sm text-slate-600">
-                    Enter positive numbers to add days or negative numbers to subtract days. This will be recorded in the audit log.
+                <p className="text-sm text-slate-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+                    <strong>Adjustments can be positive or negative:</strong>
+                    <br />
+                    • Positive numbers (e.g., 8) will add hours to the employee's leave balance
+                    <br />
+                    • Negative numbers (e.g., -4) will deduct hours from the employee's leave balance
+                    <br />
+                    All adjustments are cumulative and recorded in the audit log.
                 </p>
                 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700">Vacation Leave Adjustment</label>
+                    <label className="block text-sm font-medium text-slate-700">Vacation Leave Adjustment (Hours)</label>
                     <input
                         type="number"
                         step="0.5"
                         value={vacationAdjustment}
                         onChange={e => setVacationAdjustment(e.target.value)}
                         className="mt-1 input-field"
-                        placeholder="e.g., 2 or -1.5"
+                        placeholder="e.g., 8 or -4 (positive to add, negative to deduct)"
                     />
-                     <p className="text-xs text-slate-500 mt-1">Current total adjustment: {employee.vacationLeaveAdjustment || 0} days</p>
+                     <p className="text-xs text-slate-500 mt-1">Current total adjustment: {employee.vacationLeaveAdjustment || 0} hours</p>
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700">Sick Leave Adjustment</label>
+                    <label className="block text-sm font-medium text-slate-700">Sick Leave Adjustment (Hours)</label>
                     <input
                         type="number"
                         step="0.5"
                         value={sickAdjustment}
                         onChange={e => setSickAdjustment(e.target.value)}
                         className="mt-1 input-field"
-                        placeholder="e.g., 1 or -0.5"
+                        placeholder="e.g., 8 or -4 (positive to add, negative to deduct)"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Current total adjustment: {employee.sickLeaveAdjustment || 0} days</p>
+                    <p className="text-xs text-slate-500 mt-1">Current total adjustment: {employee.sickLeaveAdjustment || 0} hours</p>
                 </div>
 
                 <div>

@@ -1533,8 +1533,57 @@ export const resetEmployeePassword = (employeeId: string, newPassword: string): 
     return { success: false, message: 'Password reset not yet implemented' };
 };
 
-export const adjustLeaveBalance = (employeeId: string, leaveType: string, days: number, reason: string, adjustedBy: string): void => {
-    console.warn('adjustLeaveBalance: Not yet implemented in Supabase');
+export const adjustLeaveBalance = async (employeeId: string, adjustments: { vacation: number; sick: number }, reason: string, adjustedBy: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        // Get current employee data
+        const employee = await getEmployeeById(employeeId);
+        if (!employee) {
+            throw new Error('Employee not found');
+        }
+
+        // Calculate new adjustments (cumulative)
+        const currentVacAdj = employee.vacationLeaveAdjustment || 0;
+        const currentSickAdj = employee.sickLeaveAdjustment || 0;
+        const newVacAdj = currentVacAdj + adjustments.vacation;
+        const newSickAdj = currentSickAdj + adjustments.sick;
+
+        // Update employee record with new adjustments
+        const { error } = await supabase
+            .from('employees')
+            .update({
+                vacation_leave_adjustment: newVacAdj,
+                sick_leave_adjustment: newSickAdj,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', employeeId);
+
+        if (error) throw error;
+
+        // Create audit log entry
+        await supabase
+            .from('audit_logs')
+            .insert({
+                company_id: currentCompanyId,
+                employee_id: employeeId,
+                editor_id: adjustedBy,
+                changes: [
+                    {
+                        field: 'Leave Balance Adjustment',
+                        oldValue: `Vacation: ${currentVacAdj}, Sick: ${currentSickAdj}`,
+                        newValue: `Vacation: ${newVacAdj} (+${adjustments.vacation}), Sick: ${newSickAdj} (+${adjustments.sick})`,
+                        reason: reason,
+                    }
+                ],
+            });
+    } catch (error) {
+        console.error('Error adjusting leave balance:', error);
+        throw error;
+    }
 };
 
 export const getAuditLogsForEmployee = async (employeeId: string): Promise<AuditLog[]> => {
