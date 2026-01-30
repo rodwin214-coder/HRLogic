@@ -598,6 +598,25 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
     }
 };
 
+export const deleteSalaryRecord = async (salaryRecordId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        const { error } = await supabase
+            .from('salary_history')
+            .delete()
+            .eq('id', salaryRecordId);
+
+        if (error) throw error;
+    } catch (error: any) {
+        console.error('Error deleting salary record:', error);
+        throw error;
+    }
+};
+
 export const deleteEmployee = async (employeeId: string): Promise<void> => {
     try {
         await ensureUserContext();

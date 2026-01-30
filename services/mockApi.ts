@@ -938,6 +938,18 @@ export const updateEmployee = (updatedEmployee: Employee, editorId: string): Emp
     return updatedEmployee;
 };
 
+export const deleteSalaryRecord = (salaryRecordId: string): void => {
+    const employees = getEmployees();
+    for (const employee of employees) {
+        const recordIndex = employee.salaryHistory.findIndex(record => record.id === salaryRecordId);
+        if (recordIndex !== -1) {
+            employee.salaryHistory.splice(recordIndex, 1);
+            saveEmployees(employees);
+            return;
+        }
+    }
+};
+
 export const updateProfilePicture = (employeeId: string, base64Image: string): void => {
     const employees = getEmployees();
     const index = employees.findIndex(e => e.id === employeeId);

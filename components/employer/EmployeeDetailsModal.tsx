@@ -326,11 +326,7 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
         }
 
         try {
-            const updatedEmployee: Employee = {
-                ...employee,
-                salaryHistory: employee.salaryHistory.filter(record => record.id !== recordId)
-            };
-            await api.updateEmployee(updatedEmployee, editor.id);
+            await api.deleteSalaryRecord(recordId);
             await onUpdate();
         } catch (error) {
             console.error('Error deleting salary record:', error);
