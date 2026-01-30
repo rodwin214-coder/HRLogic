@@ -278,14 +278,13 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
         if (!editor) return;
 
         try {
-            const updatedEmployee: Employee = {
-                ...employee,
-                salaryHistory: [
-                    ...employee.salaryHistory,
-                    { ...newRecord, id: `sal${Date.now()}` }
-                ]
-            };
-            await api.updateEmployee(updatedEmployee, editor.id);
+            await api.addSalaryRecord(
+                employee.id,
+                newRecord.effectiveDate,
+                newRecord.basicSalary,
+                newRecord.allowance,
+                newRecord.otherBenefits
+            );
             await onUpdate();
             setIsAdding(false);
             setNewRecord(initialNewRecordState);
@@ -299,13 +298,13 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
         if (!editor || !editRecord) return;
 
         try {
-            const updatedEmployee: Employee = {
-                ...employee,
-                salaryHistory: employee.salaryHistory.map(record =>
-                    record.id === editRecord.id ? editRecord : record
-                )
-            };
-            await api.updateEmployee(updatedEmployee, editor.id);
+            await api.updateSalaryRecord(
+                editRecord.id,
+                editRecord.effectiveDate,
+                editRecord.basicSalary,
+                editRecord.allowance,
+                editRecord.otherBenefits
+            );
             await onUpdate();
             setEditingRecordId(null);
             setEditRecord(null);

@@ -598,6 +598,66 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
     }
 };
 
+export const addSalaryRecord = async (
+    employeeId: string,
+    effectiveDate: string,
+    basicSalary: number,
+    allowance: number,
+    otherBenefits: number
+): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        const { error } = await supabase
+            .from('salary_history')
+            .insert({
+                employee_id: employeeId,
+                effective_date: effectiveDate,
+                basic_salary: basicSalary,
+                allowance: allowance,
+                other_benefits: otherBenefits,
+            });
+
+        if (error) throw error;
+    } catch (error: any) {
+        console.error('Error adding salary record:', error);
+        throw error;
+    }
+};
+
+export const updateSalaryRecord = async (
+    salaryRecordId: string,
+    effectiveDate: string,
+    basicSalary: number,
+    allowance: number,
+    otherBenefits: number
+): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company not found. Please log in again.');
+        }
+
+        const { error } = await supabase
+            .from('salary_history')
+            .update({
+                effective_date: effectiveDate,
+                basic_salary: basicSalary,
+                allowance: allowance,
+                other_benefits: otherBenefits,
+            })
+            .eq('id', salaryRecordId);
+
+        if (error) throw error;
+    } catch (error: any) {
+        console.error('Error updating salary record:', error);
+        throw error;
+    }
+};
+
 export const deleteSalaryRecord = async (salaryRecordId: string): Promise<void> => {
     try {
         await ensureUserContext();
