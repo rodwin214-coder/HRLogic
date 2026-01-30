@@ -272,20 +272,25 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
     };
     const [newRecord, setNewRecord] = useState<Omit<SalaryHistoryRecord, 'id'>>(initialNewRecordState);
 
-    const handleAddRecord = () => {
+    const handleAddRecord = async () => {
         if (!editor) return;
 
-        const updatedEmployee: Employee = {
-            ...employee,
-            salaryHistory: [
-                ...employee.salaryHistory,
-                { ...newRecord, id: `sal${Date.now()}` }
-            ]
-        };
-        api.updateEmployee(updatedEmployee, editor.id);
-        onUpdate();
-        setIsAdding(false);
-        setNewRecord(initialNewRecordState);
+        try {
+            const updatedEmployee: Employee = {
+                ...employee,
+                salaryHistory: [
+                    ...employee.salaryHistory,
+                    { ...newRecord, id: `sal${Date.now()}` }
+                ]
+            };
+            await api.updateEmployee(updatedEmployee, editor.id);
+            await onUpdate();
+            setIsAdding(false);
+            setNewRecord(initialNewRecordState);
+        } catch (error) {
+            console.error('Error adding salary record:', error);
+            alert('Failed to add salary record. Please try again.');
+        }
     };
 
     const sortedHistory = [...employee.salaryHistory].sort((a,b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
