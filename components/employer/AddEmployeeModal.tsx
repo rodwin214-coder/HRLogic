@@ -77,7 +77,7 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onSuccess 
         <Modal isOpen={true} onClose={onClose} title="Add New Employee">
             <form onSubmit={(e) => { e.preventDefault(); handleAddEmployee(); }} className="space-y-4">
                 <p className="text-sm text-slate-600">
-                    An invitation email will be sent to the employee with a default password of 'password123'. They will be prompted to complete their profile upon first login.
+                    An invitation email will be sent to the employee with a default password of <strong>qwerty123</strong>. They will be prompted to complete their profile upon first login.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>

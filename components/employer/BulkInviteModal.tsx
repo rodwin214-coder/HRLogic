@@ -32,7 +32,7 @@ const BulkInviteModal: React.FC<BulkInviteModalProps> = ({ onClose, onInvite }) 
         <Modal isOpen={true} onClose={onClose} title="Bulk Invite Employees">
             <div className="space-y-4">
                 <p className="text-sm text-slate-600">
-                    Enter comma-separated email addresses. Each employee will be sent an invitation to complete their profile. Their default password will be 'password123'.
+                    Enter comma-separated email addresses. Each employee will be sent an invitation to complete their profile. Their default password will be <strong>qwerty123</strong>.
                 </p>
                 <div>
                     <label className="block text-sm font-medium text-slate-700">Email Addresses</label>
