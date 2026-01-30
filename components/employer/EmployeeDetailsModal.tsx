@@ -37,8 +37,10 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
     const [shifts, setShifts] = useState<Shift[]>([]);
 
     useEffect(() => {
-        setFormData(employee);
-    }, [employee]);
+        if (!isEditing) {
+            setFormData(employee);
+        }
+    }, [employee, isEditing]);
 
     useEffect(() => {
         const loadCustomFields = async () => {
