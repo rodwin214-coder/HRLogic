@@ -263,6 +263,7 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
 const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ employee, onUpdate }) => {
     const { user: editor } = useContext(UserContext);
     const [isAdding, setIsAdding] = useState(false);
+    const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
     const initialNewRecordState = {
         id: '',
         effectiveDate: new Date().toISOString().split('T')[0],
@@ -271,6 +272,7 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
         otherBenefits: employee.salaryHistory[employee.salaryHistory.length - 1]?.otherBenefits || 0,
     };
     const [newRecord, setNewRecord] = useState<Omit<SalaryHistoryRecord, 'id'>>(initialNewRecordState);
+    const [editRecord, setEditRecord] = useState<SalaryHistoryRecord | null>(null);
 
     const handleAddRecord = async () => {
         if (!editor) return;
@@ -291,6 +293,56 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
             console.error('Error adding salary record:', error);
             alert('Failed to add salary record. Please try again.');
         }
+    };
+
+    const handleEditRecord = async () => {
+        if (!editor || !editRecord) return;
+
+        try {
+            const updatedEmployee: Employee = {
+                ...employee,
+                salaryHistory: employee.salaryHistory.map(record =>
+                    record.id === editRecord.id ? editRecord : record
+                )
+            };
+            await api.updateEmployee(updatedEmployee, editor.id);
+            await onUpdate();
+            setEditingRecordId(null);
+            setEditRecord(null);
+        } catch (error) {
+            console.error('Error updating salary record:', error);
+            alert('Failed to update salary record. Please try again.');
+        }
+    };
+
+    const handleDeleteRecord = async (recordId: string) => {
+        if (!editor) return;
+
+        if (!window.confirm('Are you sure you want to delete this salary record?')) {
+            return;
+        }
+
+        try {
+            const updatedEmployee: Employee = {
+                ...employee,
+                salaryHistory: employee.salaryHistory.filter(record => record.id !== recordId)
+            };
+            await api.updateEmployee(updatedEmployee, editor.id);
+            await onUpdate();
+        } catch (error) {
+            console.error('Error deleting salary record:', error);
+            alert('Failed to delete salary record. Please try again.');
+        }
+    };
+
+    const startEditing = (record: SalaryHistoryRecord) => {
+        setEditingRecordId(record.id);
+        setEditRecord({ ...record });
+    };
+
+    const cancelEditing = () => {
+        setEditingRecordId(null);
+        setEditRecord(null);
     };
 
     const sortedHistory = [...employee.salaryHistory].sort((a,b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
@@ -338,18 +390,104 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Allowance</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Other Benefits</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {sortedHistory.map(record => {
                             const total = record.basicSalary + record.allowance + record.otherBenefits;
+                            const isEditing = editingRecordId === record.id;
+
                             return (
-                                <tr key={record.id}>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">{record.effectiveDate}</td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{record.basicSalary.toLocaleString()}</td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{record.allowance.toLocaleString()}</td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">{record.otherBenefits.toLocaleString()}</td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold text-right">{total.toLocaleString()}</td>
+                                <tr key={record.id} className={isEditing ? 'bg-blue-50' : ''}>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                                        {isEditing && editRecord ? (
+                                            <input
+                                                type="date"
+                                                value={editRecord.effectiveDate}
+                                                onChange={e => setEditRecord({ ...editRecord, effectiveDate: e.target.value })}
+                                                className="input-field text-sm w-full"
+                                            />
+                                        ) : (
+                                            record.effectiveDate
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                                        {isEditing && editRecord ? (
+                                            <input
+                                                type="number"
+                                                value={editRecord.basicSalary}
+                                                onChange={e => setEditRecord({ ...editRecord, basicSalary: Number(e.target.value) })}
+                                                className="input-field text-sm w-full text-right"
+                                            />
+                                        ) : (
+                                            record.basicSalary.toLocaleString()
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                                        {isEditing && editRecord ? (
+                                            <input
+                                                type="number"
+                                                value={editRecord.allowance}
+                                                onChange={e => setEditRecord({ ...editRecord, allowance: Number(e.target.value) })}
+                                                className="input-field text-sm w-full text-right"
+                                            />
+                                        ) : (
+                                            record.allowance.toLocaleString()
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                                        {isEditing && editRecord ? (
+                                            <input
+                                                type="number"
+                                                value={editRecord.otherBenefits}
+                                                onChange={e => setEditRecord({ ...editRecord, otherBenefits: Number(e.target.value) })}
+                                                className="input-field text-sm w-full text-right"
+                                            />
+                                        ) : (
+                                            record.otherBenefits.toLocaleString()
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold text-right">
+                                        {isEditing && editRecord ? (
+                                            (editRecord.basicSalary + editRecord.allowance + editRecord.otherBenefits).toLocaleString()
+                                        ) : (
+                                            total.toLocaleString()
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                                        {isEditing ? (
+                                            <div className="flex gap-2 justify-end">
+                                                <button
+                                                    onClick={handleEditRecord}
+                                                    className="text-green-600 hover:text-green-900 font-medium"
+                                                >
+                                                    Save
+                                                </button>
+                                                <button
+                                                    onClick={cancelEditing}
+                                                    className="text-gray-600 hover:text-gray-900 font-medium"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2 justify-end">
+                                                <button
+                                                    onClick={() => startEditing(record)}
+                                                    className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteRecord(record.id)}
+                                                    className="text-red-600 hover:text-red-900 font-medium"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
                                 </tr>
                             )
                         })}
