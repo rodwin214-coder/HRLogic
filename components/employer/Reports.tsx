@@ -115,9 +115,10 @@ export const Reports: React.FC = () => {
 
 
     const filteredAttendance = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
         return attendance.filter(record => {
             const recordDate = record.clockInTime.split('T')[0];
-            return recordDate >= startDate && recordDate <= endDate;
+            return recordDate >= startDate && recordDate <= endDate && recordDate <= todayStr;
         }).sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
     }, [attendance, startDate, endDate]);
 
@@ -134,7 +135,8 @@ export const Reports: React.FC = () => {
      const filteredAbsences = useMemo(() => {
         const absences: { employee: Employee; date: string }[] = [];
         const holidaysSet = new Set(holidays.map(h => h.date));
-        
+        const todayStr = new Date().toISOString().split('T')[0];
+
         const attendanceMap = new Map<string, Set<string>>();
         filteredAttendance.forEach(a => {
             const date = a.clockInTime.split('T')[0];
@@ -161,9 +163,10 @@ export const Reports: React.FC = () => {
 
         let currentDay = new Date(startDate + 'T00:00:00');
         const endDay = new Date(endDate + 'T00:00:00');
+        const today = new Date(todayStr + 'T00:00:00');
         const workSchedule = companyProfile?.workSchedule;
 
-        while (currentDay <= endDay) {
+        while (currentDay <= endDay && currentDay < today) {
             const dayOfWeek = currentDay.getDay(); // Sun=0, ..., Sat=6
             const dateStr = currentDay.toISOString().split('T')[0];
 
@@ -185,7 +188,7 @@ export const Reports: React.FC = () => {
                 employees.forEach(employee => {
                     const hasAttendance = attendanceMap.get(employee.id)?.has(dateStr);
                     const isOnLeave = onLeaveMap.get(employee.id)?.has(dateStr);
-                    
+
                     if (!hasAttendance && !isOnLeave) {
                         absences.push({ employee, date: dateStr });
                     }

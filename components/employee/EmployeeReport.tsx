@@ -52,10 +52,11 @@ const EmployeeReport: React.FC = () => {
     };
 
     const filteredAttendance = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
         return attendance
             .filter(record => {
                 const recordDate = record.clockInTime.split('T')[0];
-                return recordDate >= startDate && recordDate <= endDate;
+                return recordDate >= startDate && recordDate <= endDate && recordDate <= todayStr;
             })
             .sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
     }, [attendance, startDate, endDate]);
@@ -74,6 +75,7 @@ const EmployeeReport: React.FC = () => {
         const holidaysSet = new Set(holidays.map(h => h.date));
         const attendanceSet = new Set(filteredAttendance.map(a => a.clockInTime.split('T')[0]));
         const onLeaveSet = new Set<string>();
+        const todayStr = new Date().toISOString().split('T')[0];
 
         filteredRequests.forEach(req => {
             if (req.type === RequestType.LEAVE && req.status === RequestStatus.APPROVED) {
@@ -88,7 +90,8 @@ const EmployeeReport: React.FC = () => {
 
         let currentDay = new Date(startDate);
         const endDay = new Date(endDate);
-        while (currentDay <= endDay) {
+        const today = new Date(todayStr + 'T00:00:00');
+        while (currentDay <= endDay && currentDay < today) {
             const dayOfWeek = currentDay.getDay();
             const dateStr = currentDay.toISOString().split('T')[0];
 
