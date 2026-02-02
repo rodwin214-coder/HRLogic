@@ -1176,18 +1176,17 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
     await ensureUserContext();
     const today = new Date().toISOString().split('T')[0];
 
-    // Check if there's an active session (clocked in but not clocked out)
+    // Check if there's ANY active session (clocked in but not clocked out), regardless of clock-in date
     const { data: activeSession } = await supabase
         .from('attendance_records')
-        .select('id')
+        .select('id, clock_in_time')
         .eq('employee_id', record.employeeId)
-        .gte('clock_in_time', `${today}T00:00:00Z`)
-        .lte('clock_in_time', `${today}T23:59:59Z`)
         .is('clock_out_time', null)
         .maybeSingle();
 
     if (activeSession) {
-        throw new Error('You have an active session. Please clock out before starting a new session.');
+        const sessionDate = new Date(activeSession.clock_in_time).toLocaleDateString();
+        throw new Error(`You have an active session from ${sessionDate}. Please clock out before starting a new session.`);
     }
 
     // Check if this is the first clock-in of the day
@@ -1275,14 +1274,14 @@ export const clockOut = async (
 ): Promise<AttendanceRecord | undefined> => {
     try {
         await ensureUserContext();
-        const today = new Date().toISOString().split('T')[0];
+        // Find ANY unclosed session for this employee, regardless of clock-in date
         const { data: record, error: fetchError } = await supabase
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
-            .gte('clock_in_time', `${today}T00:00:00Z`)
-            .lte('clock_in_time', `${today}T23:59:59Z`)
             .is('clock_out_time', null)
+            .order('clock_in_time', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
         if (fetchError || !record) return undefined;
