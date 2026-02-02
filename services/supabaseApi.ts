@@ -380,9 +380,15 @@ export const getUserAccountByEmployeeId = async (employeeId: string): Promise<Us
 export const getEmployees = async (): Promise<Employee[]> => {
     try {
         await ensureUserContext();
+        if (!currentCompanyId) {
+            console.error('No company ID set');
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('employees')
             .select('*')
+            .eq('company_id', currentCompanyId)
             .order('last_name', { ascending: true });
 
         if (error) throw error;
