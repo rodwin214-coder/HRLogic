@@ -1046,13 +1046,12 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
         await ensureUserContext();
         const today = new Date().toISOString().split('T')[0];
 
-        // First, try to get an active session (not clocked out yet)
+        // First, check for ANY active session (not clocked out yet), regardless of clock-in date
+        // This handles cases where someone clocked in yesterday but didn't clock out
         const { data: activeSession } = await supabase
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
-            .gte('clock_in_time', `${today}T00:00:00Z`)
-            .lte('clock_in_time', `${today}T23:59:59Z`)
             .is('clock_out_time', null)
             .order('clock_in_time', { ascending: false })
             .limit(1)
@@ -1074,7 +1073,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
             };
         }
 
-        // If no active session, get the most recent completed session
+        // If no active session, get the most recent completed session from today
         const { data, error } = await supabase
             .from('attendance_records')
             .select('*')
@@ -1116,7 +1115,8 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
         await ensureUserContext();
         const today = new Date().toISOString().split('T')[0];
 
-        const { data, error } = await supabase
+        // Get all today's sessions
+        const { data: todaysSessions, error: todayError } = await supabase
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
@@ -1124,12 +1124,36 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
             .lte('clock_in_time', `${today}T23:59:59Z`)
             .order('clock_in_time', { ascending: true });
 
-        if (error) {
-            console.error('Error fetching all today\'s attendance:', error);
+        if (todayError) {
+            console.error('Error fetching today\'s attendance:', todayError);
             return [];
         }
 
-        return (data || []).map((record: any) => ({
+        // Also check for any unclosed session from previous days
+        const { data: previousActiveSession, error: activeError } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .lt('clock_in_time', `${today}T00:00:00Z`)
+            .is('clock_out_time', null)
+            .order('clock_in_time', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (activeError) {
+            console.error('Error fetching previous active session:', activeError);
+        }
+
+        // Combine sessions - put the previous active session first if it exists
+        const allSessions = [];
+        if (previousActiveSession) {
+            allSessions.push(previousActiveSession);
+        }
+        if (todaysSessions) {
+            allSessions.push(...todaysSessions);
+        }
+
+        return allSessions.map((record: any) => ({
             id: record.id,
             employeeId: record.employee_id,
             clockInTime: record.clock_in_time,

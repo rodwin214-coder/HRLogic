@@ -157,18 +157,13 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
         return () => clearInterval(timer);
     }, [onUpdate]);
 
-    // Load all today's sessions
+    // Load all today's sessions (including any unclosed session from previous days)
     useEffect(() => {
         const loadAllSessions = async () => {
             if (user) {
                 const sessions = await api.getTodaysAllAttendance(user.id);
-                // Double-check that all sessions are from today (in case of timezone issues)
-                const today = new Date().toDateString();
-                const filteredSessions = sessions.filter(session => {
-                    const sessionDate = new Date(session.clockInTime).toDateString();
-                    return sessionDate === today;
-                });
-                setAllTodaysSessions(filteredSessions);
+                // Include all sessions returned (today's sessions + any unclosed previous sessions)
+                setAllTodaysSessions(sessions);
             }
         };
         loadAllSessions();
@@ -363,13 +358,27 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                         {allTodaysSessions.map((session, index) => {
                             const isActiveSession = session.id === todaysRecord?.id && !session.clockOutTime;
                             const isFirstSession = index === 0;
+                            const sessionDate = new Date(session.clockInTime).toDateString();
+                            const isToday = sessionDate === new Date().toDateString();
+                            const isPreviousDay = !isToday;
                             return (
                                 <div
                                     key={session.id}
-                                    className={`p-3 rounded-md border ${isActiveSession ? 'bg-blue-50 border-blue-300' : 'bg-white border-slate-200'}`}
+                                    className={`p-3 rounded-md border ${
+                                        isActiveSession ? 'bg-blue-50 border-blue-300' :
+                                        isPreviousDay ? 'bg-yellow-50 border-yellow-300' :
+                                        'bg-white border-slate-200'
+                                    }`}
                                 >
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-semibold text-slate-500">Session {index + 1}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-slate-500">Session {index + 1}</span>
+                                            {isPreviousDay && (
+                                                <span className="text-xs text-orange-600 font-medium">
+                                                    ({new Date(session.clockInTime).toLocaleDateString()})
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             {isFirstSession && session.status && (
                                                 <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
@@ -383,6 +392,11 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                                             {isActiveSession && (
                                                 <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800">
                                                     Active
+                                                </span>
+                                            )}
+                                            {isPreviousDay && !session.clockOutTime && (
+                                                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-orange-100 text-orange-800">
+                                                    Unclosed
                                                 </span>
                                             )}
                                         </div>
