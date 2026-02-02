@@ -271,9 +271,10 @@ export const loginUser = async (
             .from('employees')
             .select('*')
             .eq('id', account.employee_id)
-            .single();
+            .maybeSingle();
 
         if (employeeError || !employeeData) {
+            console.error('Failed to fetch employee profile:', employeeError);
             return { error: 'Could not find employee profile.' };
         }
 
