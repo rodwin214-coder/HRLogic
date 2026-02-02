@@ -1,94 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
-import { GeolocationData, AttendanceRecord, Task, TaskStatus } from '../../types';
+import { GeolocationData, AttendanceRecord } from '../../types';
 import * as api from '../../services/supabaseApi';
 import { UserContext } from '../../App';
-import Modal from '../common/Modal';
-
-// --- Task Update Modal Component ---
-interface TaskUpdateOnClockOutModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirmClockOut: (notes: string) => void;
-}
-
-const TaskUpdateOnClockOutModal: React.FC<TaskUpdateOnClockOutModalProps> = ({ isOpen, onClose, onConfirmClockOut }) => {
-    const { user } = useContext(UserContext);
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [endOfDayNotes, setEndOfDayNotes] = useState('');
-
-    useEffect(() => {
-        if (isOpen && user) {
-            const loadTasks = async () => {
-                const allTasks = await api.getTasksForEmployee(user.id);
-                const inProgressTasks = allTasks.filter(t => t.status === TaskStatus.IN_PROGRESS);
-                setTasks(inProgressTasks);
-            };
-            loadTasks();
-        }
-    }, [isOpen, user]);
-
-    const handleStatusUpdate = async (task: Task, newStatus: TaskStatus) => {
-        const updatedTask = { ...task, status: newStatus };
-        if (newStatus === TaskStatus.COMPLETED) {
-            updatedTask.dateCompleted = new Date().toISOString();
-        }
-        await api.updateTask(updatedTask);
-        // Refresh list
-        setTasks(prev => prev.filter(t => t.id !== task.id));
-    };
-
-    const handleConfirm = () => {
-        onConfirmClockOut(endOfDayNotes);
-        setEndOfDayNotes('');
-    }
-
-    if (!isOpen) return null;
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="End of Shift Summary">
-            <div className="space-y-4">
-                {tasks.length > 0 ? (
-                    <div>
-                        <h3 className="font-semibold text-slate-800 mb-2">Update In-Progress Tasks</h3>
-                        <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-slate-50 border rounded-md">
-                            {tasks.map(task => (
-                                <div key={task.id} className="p-2 border-b flex justify-between items-center">
-                                    <div>
-                                        <p className="text-sm font-medium">{task.title}</p>
-                                        <p className="text-xs text-slate-500">Due: {task.dueDate}</p>
-                                    </div>
-                                    <button
-                                        onClick={() => handleStatusUpdate(task, TaskStatus.COMPLETED)}
-                                        className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-1 rounded-md hover:bg-green-200"
-                                    >
-                                        Mark as Completed
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-sm text-slate-500 text-center p-4 bg-slate-50 rounded-md">No tasks currently in progress. Great job!</p>
-                )}
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700">End of Day Notes (Optional)</label>
-                    <textarea 
-                        value={endOfDayNotes} 
-                        onChange={e => setEndOfDayNotes(e.target.value)} 
-                        rows={3} 
-                        className="mt-1 input-field"
-                        placeholder="Summarize what you've accomplished today..."
-                    ></textarea>
-                </div>
-                <div className="flex justify-end gap-2 pt-4">
-                    <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleConfirm} className="btn btn-primary">Proceed to Clock Out</button>
-                </div>
-            </div>
-        </Modal>
-    );
-};
-
 
 // Helper to format date/time
 const formatTime = (dateString?: string): string => {
@@ -124,7 +37,6 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [allTodaysSessions, setAllTodaysSessions] = useState<AttendanceRecord[]>([]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -285,7 +197,6 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
         onUpdate();
         setPhoto(null);
         setCurrentLocation(null);
-        setIsTaskModalOpen(false);
     };
 
     // Handle the clock in/out submission
@@ -313,13 +224,10 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
                 setPhoto(null);
                 setCurrentLocation(null);
                 setLoading(false);
-            } else { // Clocking Out - Check for tasks
-                const tasks = await api.getTasksForEmployee(user.id);
-                if (tasks.some(t => t.status === TaskStatus.IN_PROGRESS)) {
-                    setIsTaskModalOpen(true);
-                } else {
-                     await performClockOut('');
-                }
+            } else { // Clocking Out
+                setLoading(true);
+                await performClockOut('');
+                setLoading(false);
             }
         } catch (err: any) {
             setError(err.message || 'An unexpected error occurred.');
@@ -332,12 +240,6 @@ const ClockInOut: React.FC<ClockInOutProps> = ({ todaysRecord, onUpdate }) => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
-            <TaskUpdateOnClockOutModal
-                isOpen={isTaskModalOpen}
-                onClose={() => setIsTaskModalOpen(false)}
-                onConfirmClockOut={performClockOut}
-            />
-
             <h2 className="text-xl font-bold text-slate-800">Time Clock</h2>
 
             {/* Current Status */}
