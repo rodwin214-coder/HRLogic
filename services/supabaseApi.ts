@@ -385,14 +385,77 @@ export const getEmployees = async (): Promise<Employee[]> => {
             return [];
         }
 
-        const { data, error } = await supabase
+        // Fetch employees
+        const { data: employeesData, error: employeesError } = await supabase
             .from('employees')
             .select('*')
             .eq('company_id', currentCompanyId)
             .order('last_name', { ascending: true });
 
-        if (error) throw error;
-        const employees = await Promise.all((data || []).map(convertDbEmployeeToEmployee));
+        if (employeesError) throw employeesError;
+
+        if (!employeesData || employeesData.length === 0) {
+            return [];
+        }
+
+        // Fetch all salary history for all employees in one query
+        const employeeIds = employeesData.map(e => e.id);
+        const { data: salaryHistoryData } = await supabase
+            .from('salary_history')
+            .select('*')
+            .in('employee_id', employeeIds)
+            .order('effective_date', { ascending: false });
+
+        // Group salary history by employee_id
+        const salaryHistoryByEmployee = new Map<string, any[]>();
+        (salaryHistoryData || []).forEach((sh: any) => {
+            if (!salaryHistoryByEmployee.has(sh.employee_id)) {
+                salaryHistoryByEmployee.set(sh.employee_id, []);
+            }
+            salaryHistoryByEmployee.get(sh.employee_id)!.push(sh);
+        });
+
+        // Convert employees with pre-fetched salary history
+        const employees = employeesData.map(dbEmployee => {
+            const salaryHistory = salaryHistoryByEmployee.get(dbEmployee.id) || [];
+            return {
+                id: dbEmployee.id,
+                companyId: dbEmployee.company_id,
+                employeeId: dbEmployee.employee_id,
+                email: dbEmployee.email,
+                firstName: dbEmployee.first_name,
+                middleName: dbEmployee.middle_name,
+                lastName: dbEmployee.last_name,
+                address: dbEmployee.address || '',
+                birthdate: dbEmployee.birthdate || '',
+                mobileNumber: dbEmployee.mobile_number || '',
+                department: dbEmployee.department || '',
+                tinNumber: dbEmployee.tin_number || '',
+                sssNumber: dbEmployee.sss_number || '',
+                pagibigNumber: dbEmployee.pagibig_number || '',
+                philhealthNumber: dbEmployee.philhealth_number || '',
+                dateHired: dbEmployee.date_hired || '',
+                dateTerminated: dbEmployee.date_terminated,
+                status: dbEmployee.status || EmployeeStatus.ACTIVE,
+                employmentType: dbEmployee.employment_type || EmploymentType.PROBATIONARY,
+                salaryHistory: salaryHistory.map((s: any) => ({
+                    id: s.id,
+                    effectiveDate: s.effective_date,
+                    basicSalary: parseFloat(s.basic_salary),
+                    allowance: parseFloat(s.allowance || 0),
+                    otherBenefits: parseFloat(s.other_benefits || 0),
+                })),
+                shiftId: dbEmployee.shift_id || '',
+                workSchedule: dbEmployee.work_schedule,
+                profilePicture: dbEmployee.profile_picture,
+                files: [],
+                notes: dbEmployee.notes,
+                vacationLeaveAdjustment: parseFloat(dbEmployee.vacation_leave_adjustment || 0),
+                sickLeaveAdjustment: parseFloat(dbEmployee.sick_leave_adjustment || 0),
+                customFields: dbEmployee.custom_fields || {},
+            };
+        });
+
         return employees;
     } catch (error) {
         console.error('Error fetching employees:', error);
@@ -1638,11 +1701,16 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             .update({ status })
             .eq('id', requestId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (error) {
             console.error('Error updating request status:', error);
-            return undefined;
+            throw error;
+        }
+
+        if (!data) {
+            console.error('No request found with id:', requestId);
+            throw new Error('Request not found');
         }
 
         if (status === RequestStatus.APPROVED && data.request_type === RequestType.CHANGE_REQUEST && data.changes) {
@@ -1659,6 +1727,7 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
 
             if (employeeUpdateError) {
                 console.error('Error updating employee:', employeeUpdateError);
+                throw employeeUpdateError;
             }
         }
 
@@ -1678,7 +1747,7 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
         } as AppRequest;
     } catch (error) {
         console.error('Error in updateRequestStatus:', error);
-        return undefined;
+        throw error;
     }
 };
 

@@ -122,9 +122,13 @@ const RequestManagement: React.FC = () => {
             }
         }
 
-
-        await api.updateRequestStatus(requestId, status, editor.id);
-        await fetchData();
+        try {
+            await api.updateRequestStatus(requestId, status, editor.id);
+            await fetchData();
+        } catch (error) {
+            console.error('Failed to update request status:', error);
+            alert('Failed to update request status. Please try again.');
+        }
     };
 
 
