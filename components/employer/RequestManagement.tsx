@@ -83,7 +83,7 @@ const RequestManagement: React.FC = () => {
 
         // Add a confirmation check for leave requests with insufficient balance
         if (status === RequestStatus.APPROVED && request.type === RequestType.LEAVE) {
-            const balance = api.calculateLeaveBalance(request.employeeId);
+            const balance = await api.calculateLeaveBalance(request.employeeId);
             const startDate = new Date(request.startDate);
             const endDate = new Date(request.endDate);
             // Simple day diff calculation, inclusive. In a real app, this would exclude weekends/holidays.
