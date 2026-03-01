@@ -76,21 +76,14 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({ canAddHoliday = false
     const [newCustomType, setNewCustomType] = useState('');
 
     const fetchData = useCallback(async () => {
-        const [holidaysData, requestsData, employeesData] = await Promise.all([
+        const [holidaysData, requestsData, employeesData, customTypes] = await Promise.all([
             api.getHolidays(),
             api.getRequests(),
-            api.getEmployees()
+            api.getEmployees(),
+            api.getCustomHolidayTypes()
         ]);
         setHolidays(holidaysData);
-
-        const uniqueTypes = new Set<string>();
-        holidaysData.forEach(h => {
-            if (h.type && h.type !== 'Regular' && h.type !== 'Special') {
-                uniqueTypes.add(h.type);
-            }
-        });
-        setCustomHolidayTypes(Array.from(uniqueTypes));
-
+        setCustomHolidayTypes(customTypes);
         setApprovedLeaves(requestsData.filter(r => r.status === RequestStatus.APPROVED && r.type === RequestType.LEAVE) as LeaveRequest[]);
         setEmployees(employeesData);
     }, []);
@@ -180,11 +173,17 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({ canAddHoliday = false
         }
     };
 
-    const handleAddCustomType = () => {
+    const handleAddCustomType = async () => {
         if (newCustomType.trim() && !customHolidayTypes.includes(newCustomType.trim())) {
-            setCustomHolidayTypes([...customHolidayTypes, newCustomType.trim()]);
-            setNewCustomType('');
-            setIsAddingCustomType(false);
+            try {
+                await api.addCustomHolidayType(newCustomType.trim());
+                await fetchData();
+                setNewCustomType('');
+                setIsAddingCustomType(false);
+            } catch (error) {
+                console.error('Failed to add custom holiday type:', error);
+                alert('Failed to add custom holiday type. Please try again.');
+            }
         }
     };
 

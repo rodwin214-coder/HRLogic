@@ -1653,6 +1653,63 @@ export const deleteHoliday = async (holidayId: string): Promise<void> => {
     }
 };
 
+export const getCustomHolidayTypes = async (): Promise<string[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('custom_holiday_types')
+            .select('type_name')
+            .order('type_name', { ascending: true });
+
+        if (error) throw error;
+        return (data || []).map((item: any) => item.type_name);
+    } catch (error) {
+        console.error('Error fetching custom holiday types:', error);
+        return [];
+    }
+};
+
+export const addCustomHolidayType = async (typeName: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { error } = await supabase
+            .from('custom_holiday_types')
+            .insert([{
+                company_id: currentCompanyId,
+                type_name: typeName,
+            }]);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error adding custom holiday type:', error);
+        throw error;
+    }
+};
+
+export const deleteCustomHolidayType = async (typeName: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) {
+            throw new Error('Company context not set');
+        }
+
+        const { error } = await supabase
+            .from('custom_holiday_types')
+            .delete()
+            .eq('company_id', currentCompanyId)
+            .eq('type_name', typeName);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting custom holiday type:', error);
+        throw error;
+    }
+};
+
 export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
     console.warn('changePassword: Not yet implemented in Supabase');
     return { success: false, message: 'Password change not yet implemented' };
