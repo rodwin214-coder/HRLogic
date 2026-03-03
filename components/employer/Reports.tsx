@@ -118,9 +118,9 @@ export const Reports: React.FC = () => {
         const todayStr = new Date().toISOString().split('T')[0];
         return attendance.filter(record => {
             const recordDate = record.clockInTime.split('T')[0];
-            return recordDate >= startDate && recordDate <= endDate && recordDate <= todayStr;
+            return recordDate <= todayStr;
         }).sort((a, b) => new Date(b.clockInTime).getTime() - new Date(a.clockInTime).getTime());
-    }, [attendance, startDate, endDate]);
+    }, [attendance]);
 
     const filteredRequests = useMemo(() => {
         return requests.filter(req => {

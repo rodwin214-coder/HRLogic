@@ -1944,15 +1944,12 @@ export const addManualAttendance = async (record: Omit<AttendanceRecord, 'id'>, 
 export const calculatePayrollSummary = async (startDate: string, endDate: string): Promise<any[]> => {
     try {
         const [attendance, employees, requests] = await Promise.all([
-            getAttendance(),
+            getAttendance(startDate, endDate),
             getEmployees(),
             getRequests(),
         ]);
 
-        const filteredAttendance = attendance.filter(record => {
-            const recordDate = record.clockInTime.split('T')[0];
-            return recordDate >= startDate && recordDate <= endDate;
-        });
+        const filteredAttendance = attendance;
 
         const filteredRequests = requests.filter(req => {
             if (req.type === RequestType.LEAVE) {
