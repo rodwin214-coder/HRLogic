@@ -1,12 +1,13 @@
 
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { UserRole, Employee } from './types';
 import * as api from './services/supabaseApi';
 import { WORKLOGIX_LOGO_BASE64 } from './services/supabaseApi';
-import EmployeeDashboard from './components/employee/EmployeeDashboard';
-import EmployerDashboard from './components/employer/EmployerDashboard';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
+
+const EmployeeDashboard = lazy(() => import('./components/employee/EmployeeDashboard'));
+const EmployerDashboard = lazy(() => import('./components/employer/EmployerDashboard'));
 
 interface UserContextType {
     user: Employee | null;
@@ -190,7 +191,14 @@ const App: React.FC = () => {
     const isFormValid = Object.keys(errors).length === 0;
 
     if (isLoading) {
-        return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--color-primary))]"></div>
+                    <p className="mt-4 text-slate-600">Loading application...</p>
+                </div>
+            </div>
+        );
     }
 
     if (!currentUser.user) {
@@ -307,8 +315,17 @@ const App: React.FC = () => {
     return (
         <UserContext.Provider value={userContextValue}>
             <div className="min-h-screen">
-                {currentUser.role === UserRole.EMPLOYEE && <EmployeeDashboard />}
-                {currentUser.role === UserRole.EMPLOYER && <EmployerDashboard />}
+                <Suspense fallback={
+                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+                        <div className="text-center">
+                            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--color-primary))]"></div>
+                            <p className="mt-4 text-slate-600">Loading dashboard...</p>
+                        </div>
+                    </div>
+                }>
+                    {currentUser.role === UserRole.EMPLOYEE && <EmployeeDashboard />}
+                    {currentUser.role === UserRole.EMPLOYER && <EmployerDashboard />}
+                </Suspense>
             </div>
         </UserContext.Provider>
     );

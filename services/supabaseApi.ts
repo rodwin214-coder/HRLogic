@@ -87,16 +87,27 @@ export const setCurrentCompanyId = (companyId: string) => {
     currentCompanyId = companyId;
 };
 
-// Helper to get company by code
-const getCompanyByCode = async (companyCode: string): Promise<any | null> => {
-    const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('company_code', companyCode)
-        .maybeSingle();
+// Helper to get company by code with retry logic
+const getCompanyByCode = async (companyCode: string, retries = 3): Promise<any | null> => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const { data, error } = await supabase
+                .from('companies')
+                .select('*')
+                .eq('company_code', companyCode)
+                .maybeSingle();
 
-    if (error) throw error;
-    return data;
+            if (error) throw error;
+            return data;
+        } catch (error: any) {
+            if (i === retries - 1 || !error.message?.includes('fetch')) {
+                throw error;
+            }
+            console.log(`[RETRY] Retrying getCompanyByCode, attempt ${i + 2}/${retries}`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+    }
+    return null;
 };
 
 // Public function to initialize company context by company code
