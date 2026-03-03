@@ -100,11 +100,12 @@ const getCompanyByCode = async (companyCode: string, retries = 3): Promise<any |
             if (error) throw error;
             return data;
         } catch (error: any) {
-            if (i === retries - 1 || !error.message?.includes('fetch')) {
+            const isNetworkError = error.message?.includes('fetch') || error.message?.includes('timed out');
+            if (i === retries - 1 || !isNetworkError) {
                 throw error;
             }
             console.log(`[RETRY] Retrying getCompanyByCode, attempt ${i + 2}/${retries}`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
         }
     }
     return null;
@@ -258,12 +259,32 @@ export const loginUser = async (
         console.log('[LOGIN] Step 2: Company found:', company.id);
 
         console.log('[LOGIN] Step 3: Fetching user account');
-        const { data: account, error: accountError } = await supabase
-            .from('user_accounts')
-            .select('*')
-            .eq('company_id', company.id)
-            .eq('email', email)
-            .maybeSingle();
+        let account = null;
+        let accountError = null;
+
+        for (let i = 0; i < 3; i++) {
+            try {
+                const result = await supabase
+                    .from('user_accounts')
+                    .select('*')
+                    .eq('company_id', company.id)
+                    .eq('email', email)
+                    .maybeSingle();
+
+                account = result.data;
+                accountError = result.error;
+                break;
+            } catch (error: any) {
+                const isNetworkError = error.message?.includes('fetch') || error.message?.includes('timed out');
+                if (i < 2 && isNetworkError) {
+                    console.log(`[LOGIN] Retry ${i + 1}: Fetching user account`);
+                    await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+                } else {
+                    accountError = error;
+                    break;
+                }
+            }
+        }
 
         if (accountError || !account) {
             console.log('[LOGIN] Account error:', accountError);
@@ -282,11 +303,31 @@ export const loginUser = async (
         await setCurrentUserEmail(email);
 
         console.log('[LOGIN] Step 8: Fetching employee profile');
-        const { data: employeeData, error: employeeError } = await supabase
-            .from('employees')
-            .select('*')
-            .eq('id', account.employee_id)
-            .maybeSingle();
+        let employeeData = null;
+        let employeeError = null;
+
+        for (let i = 0; i < 3; i++) {
+            try {
+                const result = await supabase
+                    .from('employees')
+                    .select('*')
+                    .eq('id', account.employee_id)
+                    .maybeSingle();
+
+                employeeData = result.data;
+                employeeError = result.error;
+                break;
+            } catch (error: any) {
+                const isNetworkError = error.message?.includes('fetch') || error.message?.includes('timed out');
+                if (i < 2 && isNetworkError) {
+                    console.log(`[LOGIN] Retry ${i + 1}: Fetching employee profile`);
+                    await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+                } else {
+                    employeeError = error;
+                    break;
+                }
+            }
+        }
 
         if (employeeError || !employeeData) {
             console.error('[LOGIN] Failed to fetch employee profile:', employeeError);
@@ -304,7 +345,10 @@ export const loginUser = async (
         return { user: employee, role: account.role };
     } catch (error: any) {
         console.error('[LOGIN] Login error:', error);
-        return { error: error.message || 'Login failed. Please try again.' };
+        const errorMessage = error.message?.includes('timed out')
+            ? 'Connection timeout. Please check your internet connection and try again.'
+            : error.message || 'Login failed. Please try again.';
+        return { error: errorMessage };
     }
 };
 
