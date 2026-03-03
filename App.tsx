@@ -224,6 +224,16 @@ const App: React.FC = () => {
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--color-primary))]"></div>
                     <p className="mt-4 text-slate-600">Loading application...</p>
                     <p className="mt-2 text-xs text-slate-500">This may take a few seconds...</p>
+                    <button
+                        onClick={() => {
+                            localStorage.clear();
+                            setIsLoading(false);
+                            setApiError('Session cleared. Please log in again.');
+                        }}
+                        className="mt-6 px-4 py-2 text-sm text-slate-600 hover:text-slate-800 underline"
+                    >
+                        Taking too long? Skip to login
+                    </button>
                 </div>
             </div>
         );
