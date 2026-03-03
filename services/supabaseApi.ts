@@ -238,14 +238,15 @@ export const loginUser = async (
     password: string
 ): Promise<{ user: Employee; role: UserRole } | { error: string }> => {
     try {
-        // Get company
+        console.log('[LOGIN] Step 1: Getting company by code:', companyCode);
         const company = await getCompanyByCode(companyCode);
         if (!company) {
             return { error: 'Invalid company code.' };
         }
         currentCompanyId = company.id;
+        console.log('[LOGIN] Step 2: Company found:', company.id);
 
-        // Get user account
+        console.log('[LOGIN] Step 3: Fetching user account');
         const { data: account, error: accountError } = await supabase
             .from('user_accounts')
             .select('*')
@@ -254,19 +255,22 @@ export const loginUser = async (
             .maybeSingle();
 
         if (accountError || !account) {
+            console.log('[LOGIN] Account error:', accountError);
             return { error: 'Invalid email or password.' };
         }
+        console.log('[LOGIN] Step 4: Account found');
 
-        // Verify password
+        console.log('[LOGIN] Step 5: Verifying password');
         const passwordMatch = await bcrypt.compare(password, account.password_hash);
         if (!passwordMatch) {
             return { error: 'Invalid email or password.' };
         }
+        console.log('[LOGIN] Step 6: Password verified');
 
-        // Set current user email for RLS
+        console.log('[LOGIN] Step 7: Setting user email for RLS');
         await setCurrentUserEmail(email);
 
-        // Get employee profile
+        console.log('[LOGIN] Step 8: Fetching employee profile');
         const { data: employeeData, error: employeeError } = await supabase
             .from('employees')
             .select('*')
@@ -274,30 +278,38 @@ export const loginUser = async (
             .maybeSingle();
 
         if (employeeError || !employeeData) {
-            console.error('Failed to fetch employee profile:', employeeError);
+            console.error('[LOGIN] Failed to fetch employee profile:', employeeError);
             return { error: 'Could not find employee profile.' };
         }
+        console.log('[LOGIN] Step 9: Employee data fetched');
 
         if (employeeData.status === EmployeeStatus.TERMINATED) {
             return { error: 'This account has been terminated and is no longer active.' };
         }
 
+        console.log('[LOGIN] Step 10: Converting employee data');
         const employee: Employee = await convertDbEmployeeToEmployee(employeeData);
+        console.log('[LOGIN] Step 11: Login successful');
         return { user: employee, role: account.role };
     } catch (error: any) {
-        console.error('Login error:', error);
+        console.error('[LOGIN] Login error:', error);
         return { error: error.message || 'Login failed. Please try again.' };
     }
 };
 
 // Helper function to convert database employee to Employee type
 const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> => {
-    // Get salary history
-    const { data: salaryHistory } = await supabase
+    console.log('[CONVERT] Fetching salary history for employee:', dbEmployee.id);
+    const { data: salaryHistory, error: salaryError } = await supabase
         .from('salary_history')
         .select('*')
         .eq('employee_id', dbEmployee.id)
         .order('effective_date', { ascending: false });
+
+    if (salaryError) {
+        console.error('[CONVERT] Salary history error:', salaryError);
+    }
+    console.log('[CONVERT] Salary history fetched:', salaryHistory?.length || 0, 'records');
 
     return {
         id: dbEmployee.id,
