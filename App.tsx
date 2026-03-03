@@ -55,6 +55,15 @@ const App: React.FC = () => {
         if (loggedInUserId && loggedInCompanyCode && loggedInEmail) {
             // Auto-login with stored credentials
             const initSession = async () => {
+                const timeoutId = setTimeout(() => {
+                    console.error('Auto-login timed out after 10 seconds');
+                    setApiError('Unable to connect to the database. The server may be starting up or unreachable. Please try logging in manually.');
+                    localStorage.removeItem('loggedInUserId');
+                    localStorage.removeItem('loggedInCompanyCode');
+                    localStorage.removeItem('loggedInEmail');
+                    setIsLoading(false);
+                }, 10000); // 10 second timeout
+
                 try {
                     // Initialize company context
                     await api.initializeCompanyContext(loggedInCompanyCode);
@@ -69,14 +78,18 @@ const App: React.FC = () => {
                             setCompanyCode(loggedInCompanyCode);
                         }
                     }
+                    clearTimeout(timeoutId);
                 } catch (err: any) {
                     console.error('Auto-login error:', err);
+                    clearTimeout(timeoutId);
                     if (err?.message?.includes('timed out') || err?.message?.includes('fetch')) {
-                        setApiError('Unable to connect to the server. Please check your internet connection and try again.');
-                        localStorage.removeItem('loggedInUserId');
-                        localStorage.removeItem('loggedInCompanyCode');
-                        localStorage.removeItem('loggedInEmail');
+                        setApiError('Unable to connect to the database. Please check your connection and try again.');
+                    } else {
+                        setApiError('Session expired. Please log in again.');
                     }
+                    localStorage.removeItem('loggedInUserId');
+                    localStorage.removeItem('loggedInCompanyCode');
+                    localStorage.removeItem('loggedInEmail');
                 }
                 setIsLoading(false);
             };
@@ -210,6 +223,7 @@ const App: React.FC = () => {
                 <div className="text-center">
                     <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--color-primary))]"></div>
                     <p className="mt-4 text-slate-600">Loading application...</p>
+                    <p className="mt-2 text-xs text-slate-500">This may take a few seconds...</p>
                 </div>
             </div>
         );

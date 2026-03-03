@@ -14,7 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: async (url, options = {}) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
       try {
         const response = await fetch(url, {
@@ -26,7 +26,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       } catch (error: any) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-          console.error('Request timed out after 60s:', url);
+          console.error('Request timed out after 8s:', url);
+          throw new Error('Request timed out. The database may not be ready yet.');
         }
         throw error;
       }
