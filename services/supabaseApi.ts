@@ -30,26 +30,46 @@ let currentUserEmail: string | null = null;
 
 export const setCurrentUserEmail = async (email: string) => {
     currentUserEmail = email;
-    // Set the session variable for RLS
-    try {
-        await supabase.rpc('set_config', {
-            setting_name: 'app.current_user_email',
-            setting_value: email
-        } as any);
-    } catch (error) {
-        console.warn('set_config RPC not available, RLS may not work correctly');
+
+    for (let i = 0; i < 3; i++) {
+        try {
+            await supabase.rpc('set_config', {
+                setting_name: 'app.current_user_email',
+                setting_value: email
+            } as any);
+            return;
+        } catch (error: any) {
+            const isNetworkError = error.message?.includes('fetch') || error.message?.includes('timed out');
+            if (i < 2 && isNetworkError) {
+                console.log(`[RLS] Retry ${i + 1}: Setting user context`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            } else {
+                console.warn('set_config RPC failed, RLS may not work correctly:', error.message);
+                return;
+            }
+        }
     }
 };
 
 const ensureUserContext = async () => {
     if (currentUserEmail) {
-        try {
-            await supabase.rpc('set_config', {
-                setting_name: 'app.current_user_email',
-                setting_value: currentUserEmail
-            } as any);
-        } catch (error) {
-            console.warn('Failed to set user context for RLS');
+        for (let i = 0; i < 3; i++) {
+            try {
+                await supabase.rpc('set_config', {
+                    setting_name: 'app.current_user_email',
+                    setting_value: currentUserEmail
+                } as any);
+                return;
+            } catch (error: any) {
+                const isNetworkError = error.message?.includes('fetch') || error.message?.includes('timed out');
+                if (i < 2 && isNetworkError) {
+                    console.log(`[RLS] Retry ${i + 1}: Ensuring user context`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                } else {
+                    console.warn('Failed to ensure user context for RLS');
+                    return;
+                }
+            }
         }
     }
 };
