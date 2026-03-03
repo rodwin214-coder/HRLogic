@@ -69,8 +69,14 @@ const App: React.FC = () => {
                             setCompanyCode(loggedInCompanyCode);
                         }
                     }
-                } catch (err) {
+                } catch (err: any) {
                     console.error('Auto-login error:', err);
+                    if (err?.message?.includes('timed out') || err?.message?.includes('fetch')) {
+                        setApiError('Unable to connect to the server. Please check your internet connection and try again.');
+                        localStorage.removeItem('loggedInUserId');
+                        localStorage.removeItem('loggedInCompanyCode');
+                        localStorage.removeItem('loggedInEmail');
+                    }
                 }
                 setIsLoading(false);
             };
@@ -124,7 +130,11 @@ const App: React.FC = () => {
                 }
             }
         } catch (err: any) {
-            setApiError(err.message || 'Login failed. Please try again.');
+            if (err?.message?.includes('timed out') || err?.message?.includes('fetch')) {
+                setApiError('Unable to connect to the server. The database may be paused or unreachable. Please try again later.');
+            } else {
+                setApiError(err.message || 'Login failed. Please try again.');
+            }
         }
     }, [companyCode, email, password, rememberMe, validate]);
 
@@ -146,7 +156,11 @@ const App: React.FC = () => {
                 }
             }
         } catch (err: any) {
-            setApiError(err.message || 'Registration failed. Please try again.');
+            if (err?.message?.includes('timed out') || err?.message?.includes('fetch')) {
+                setApiError('Unable to connect to the server. The database may be paused or unreachable. Please try again later.');
+            } else {
+                setApiError(err.message || 'Registration failed. Please try again.');
+            }
         }
     }, [companyCode, companyName, firstName, lastName, email, password, rememberMe, validate]);
 

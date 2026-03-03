@@ -12,11 +12,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: false,
   },
   global: {
-    fetch: (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(30000),
-      });
+    fetch: async (url, options = {}) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return response;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          console.error('Request timed out after 60s:', url);
+        }
+        throw error;
+      }
     },
   },
 });
