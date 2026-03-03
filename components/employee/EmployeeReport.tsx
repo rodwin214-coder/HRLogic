@@ -30,7 +30,7 @@ const EmployeeReport: React.FC = () => {
         const loadData = async () => {
             if (user) {
                 const [attendanceData, requestsData, holidaysData] = await Promise.all([
-                    api.getAttendance(),
+                    api.getAttendance(startDate, endDate),
                     api.getRequests(),
                     api.getHolidays()
                 ]);
@@ -41,7 +41,7 @@ const EmployeeReport: React.FC = () => {
             }
         };
         loadData();
-    }, [user]);
+    }, [user, startDate, endDate]);
 
     const calculateTotalHours = (record: AttendanceRecord): string => {
         if (!record.clockOutTime) return 'N/A';

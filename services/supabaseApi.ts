@@ -1076,13 +1076,21 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
     }
 };
 
-export const getAttendance = async (): Promise<AttendanceRecord[]> => {
+export const getAttendance = async (startDate?: string, endDate?: string): Promise<AttendanceRecord[]> => {
     try {
         await ensureUserContext();
-        const { data, error } = await supabase
+        let query = supabase
             .from('attendance_records')
-            .select('*')
-            .order('clock_in_time', { ascending: false });
+            .select('*');
+
+        if (startDate) {
+            query = query.gte('clock_in_time', `${startDate}T00:00:00`);
+        }
+        if (endDate) {
+            query = query.lte('clock_in_time', `${endDate}T23:59:59`);
+        }
+
+        const { data, error } = await query.order('clock_in_time', { ascending: false });
 
         if (error) throw error;
         return (data || []).map((a: any) => ({

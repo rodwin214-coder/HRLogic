@@ -52,7 +52,7 @@ export const Reports: React.FC = () => {
 
     const fetchData = useCallback(async () => {
         const [attendanceData, employeesData, shiftsData, requestsData, holidaysData, profileData] = await Promise.all([
-            api.getAttendance(),
+            api.getAttendance(startDate, endDate),
             api.getEmployees(),
             api.getShifts(),
             api.getRequests(),
@@ -65,7 +65,7 @@ export const Reports: React.FC = () => {
         setRequests(requestsData);
         setHolidays(holidaysData);
         setCompanyProfile(profileData);
-    }, []);
+    }, [startDate, endDate]);
 
     useEffect(() => {
         fetchData();
