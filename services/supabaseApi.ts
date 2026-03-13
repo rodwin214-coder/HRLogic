@@ -1495,7 +1495,7 @@ export const calculateLeaveBalance = async (employeeId: string): Promise<LeaveBa
 
         (requests || []).forEach((req: any) => {
             const duration = (new Date(req.end_date).getTime() - new Date(req.start_date).getTime()) / (1000 * 3600 * 24) + 1;
-            if (req.leave_type === LeaveType.VACATION || req.leave_type === LeaveType.CLIENT_HOLIDAY || req.leave_type === LeaveType.EMERGENCY) {
+            if (req.leave_type === LeaveType.VACATION || req.leave_type === LeaveType.EMERGENCY) {
                 usedVacation += duration;
             } else if (req.leave_type === LeaveType.SICK) {
                 usedSick += duration;

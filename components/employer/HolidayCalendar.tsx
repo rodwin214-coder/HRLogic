@@ -174,15 +174,37 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({ canAddHoliday = false
     };
 
     const handleAddCustomType = async () => {
-        if (newCustomType.trim() && !customHolidayTypes.includes(newCustomType.trim())) {
+        const trimmedType = newCustomType.trim();
+        if (!trimmedType) {
+            alert('Please enter a holiday type name.');
+            return;
+        }
+        if (customHolidayTypes.includes(trimmedType)) {
+            alert('This holiday type already exists.');
+            return;
+        }
+        try {
+            await api.addCustomHolidayType(trimmedType);
+            await fetchData();
+            setNewCustomType('');
+            setIsAddingCustomType(false);
+        } catch (error) {
+            console.error('Failed to add custom holiday type:', error);
+            alert('Failed to add custom holiday type. Please try again.');
+        }
+    };
+
+    const handleDeleteCustomType = async (typeName: string) => {
+        if (window.confirm(`Are you sure you want to delete the "${typeName}" holiday type?`)) {
             try {
-                await api.addCustomHolidayType(newCustomType.trim());
+                await api.deleteCustomHolidayType(typeName);
+                if (holidayTypeFilter === typeName) {
+                    setHolidayTypeFilter('All');
+                }
                 await fetchData();
-                setNewCustomType('');
-                setIsAddingCustomType(false);
             } catch (error) {
-                console.error('Failed to add custom holiday type:', error);
-                alert('Failed to add custom holiday type. Please try again.');
+                console.error('Failed to delete custom holiday type:', error);
+                alert('Failed to delete custom holiday type. Please try again.');
             }
         }
     };
@@ -209,7 +231,20 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({ canAddHoliday = false
                         <button onClick={() => setHolidayTypeFilter('Regular')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${holidayTypeFilter === 'Regular' ? 'bg-white shadow-sm font-semibold text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>Regular</button>
                         <button onClick={() => setHolidayTypeFilter('Special')} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${holidayTypeFilter === 'Special' ? 'bg-white shadow-sm font-semibold text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>Special</button>
                         {customHolidayTypes.map(type => (
-                            <button key={type} onClick={() => setHolidayTypeFilter(type)} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${holidayTypeFilter === type ? 'bg-white shadow-sm font-semibold text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>{type}</button>
+                            <div key={type} className="flex items-center gap-1 group">
+                                <button onClick={() => setHolidayTypeFilter(type)} className={`px-3 py-1 text-sm rounded-md transition-colors whitespace-nowrap ${holidayTypeFilter === type ? 'bg-white shadow-sm font-semibold text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}>{type}</button>
+                                {canAddHoliday && (
+                                    <button
+                                        onClick={() => handleDeleteCustomType(type)}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-red-600 hover:text-red-800"
+                                        title={`Delete ${type}`}
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
                         ))}
                     </div>
                     {canAddHoliday && (
