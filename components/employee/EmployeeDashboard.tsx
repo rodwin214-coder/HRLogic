@@ -182,6 +182,15 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
     const [otUtDate, setOtUtDate] = useState('');
     const [hours, setHours] = useState<number | string>(1);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
+    const [customHolidayTypes, setCustomHolidayTypes] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchCustomTypes = async () => {
+            const types = await api.getCustomHolidayTypes();
+            setCustomHolidayTypes(types);
+        };
+        fetchCustomTypes();
+    }, []);
 
     const validate = useCallback(() => {
         const newErrors: { [key: string]: string } = {};
@@ -231,6 +240,7 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
                         <label className="block text-sm font-medium text-slate-700">Leave Type</label>
                         <select value={leaveType} onChange={e => setLeaveType(e.target.value as LeaveType)} className="mt-1 block w-full input-field">
                             {Object.values(LeaveType).map(lt => <option key={lt} value={lt}>{lt}</option>)}
+                            {customHolidayTypes.map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
