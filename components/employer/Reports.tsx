@@ -45,11 +45,25 @@ export const Reports: React.FC = () => {
     const [processMessage, setProcessMessage] = useState('');
 
     const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-    
-    const [startDate, setStartDate] = useState(firstDayOfMonth);
-    const [endDate, setEndDate] = useState(lastDayOfMonth);
+    const currentDay = today.getDate();
+
+    const getDefaultDateRange = () => {
+        if (currentDay <= 15) {
+            return {
+                start: new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0],
+                end: new Date(today.getFullYear(), today.getMonth(), 15).toISOString().split('T')[0]
+            };
+        } else {
+            return {
+                start: new Date(today.getFullYear(), today.getMonth(), 16).toISOString().split('T')[0],
+                end: new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+            };
+        }
+    };
+
+    const defaultRange = getDefaultDateRange();
+    const [startDate, setStartDate] = useState(defaultRange.start);
+    const [endDate, setEndDate] = useState(defaultRange.end);
 
     const fetchData = useCallback(async () => {
         try {
@@ -532,72 +546,73 @@ export const Reports: React.FC = () => {
                         {isLoading ? 'Syncing...' : 'Sync'}
                     </button>
                 </div>
-                <div className="overflow-x-auto">
-                     <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock In</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Attendance</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Images</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Clock Out</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Hours</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                           {isLoading ? (
-                                <tr><td colSpan={11} className="text-center py-8"><div className="flex items-center justify-center gap-2"><svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span className="text-sm text-gray-600">Loading attendance records...</span></div></td></tr>
-                           ) : filteredAttendance.length > 0 ? filteredAttendance.map(record => {
-                               const { totalHours, status } = calculateStatus(record);
-                               const employee = getEmployee(record.employeeId);
-                               return (
-                                <tr key={record.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleTimeString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {record.status ? (
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                record.status === 'On Time'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : 'bg-red-100 text-red-800'
-                                            }`}>
-                                                {record.status}
-                                            </span>
-                                        ) : (
-                                            <span className="text-gray-400 text-xs">-</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {record.clockInLocation ? (
-                                            <div className="flex flex-col gap-1">
-                                                <a
-                                                    href={`https://www.google.com/maps?q=${record.clockInLocation.latitude},${record.clockInLocation.longitude}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-indigo-600 hover:text-indigo-900 hover:underline inline-flex items-center gap-1"
-                                                    title={`Lat: ${record.clockInLocation.latitude}, Lon: ${record.clockInLocation.longitude}`}
-                                                >
-                                                    View on Map
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                </a>
-                                                {record.clockInLocation.accuracy !== undefined && (
-                                                    <span className={`text-xs ${record.clockInLocation.accuracy <= 50 ? 'text-green-600' : record.clockInLocation.accuracy <= 100 ? 'text-yellow-600' : 'text-orange-600'}`}>
-                                                        ±{record.clockInLocation.accuracy.toFixed(0)}m
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ) : 'N/A'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">In</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Attendance</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">Location</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">Images</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Out</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Status</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden xl:table-cell">Notes</th>
+                                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                               {isLoading ? (
+                                    <tr><td colSpan={11} className="text-center py-8"><div className="flex items-center justify-center gap-2"><svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span className="text-sm text-gray-600">Loading attendance records...</span></div></td></tr>
+                               ) : filteredAttendance.length > 0 ? filteredAttendance.map(record => {
+                                   const { totalHours, status } = calculateStatus(record);
+                                   const employee = getEmployee(record.employeeId);
+                                   return (
+                                    <tr key={record.id}>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleDateString()}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(record.clockInTime).toLocaleTimeString()}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm hidden md:table-cell">
+                                            {record.status ? (
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    record.status === 'On Time'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {record.status}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-400 text-xs">-</span>
+                                            )}
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                                            {record.clockInLocation ? (
+                                                <div className="flex flex-col gap-1">
+                                                    <a
+                                                        href={`https://www.google.com/maps?q=${record.clockInLocation.latitude},${record.clockInLocation.longitude}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
+                                                        title={`Lat: ${record.clockInLocation.latitude}, Lon: ${record.clockInLocation.longitude}`}
+                                                    >
+                                                        View Map
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                    </a>
+                                                    {record.clockInLocation.accuracy !== undefined && (
+                                                        <span className={`text-xs ${record.clockInLocation.accuracy <= 50 ? 'text-green-600' : record.clockInLocation.accuracy <= 100 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                                                            ±{record.clockInLocation.accuracy.toFixed(0)}m
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : 'N/A'}
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
                                         <div className="flex gap-2">
                                             {record.clockInPhoto ? (
                                                 <div className="flex flex-col items-center">
@@ -654,93 +669,98 @@ export const Reports: React.FC = () => {
                                                 </div>
                                             ) : null}
                                         </div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '---'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{totalHours}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status === 'Late' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
-                                            {status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 max-w-xs truncate" title={record.manualEntryReason}>
-                                        {record.manualEntryReason ? <span className="text-blue-600 font-semibold">Edited</span> : '---'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button onClick={() => handleOpenEditModal(record)} className="text-indigo-600 hover:text-indigo-900">Edit</button>
-                                    </td>
-                                </tr>
-                               )
-                           }) : (
-                                <tr><td colSpan={11} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
-                           )}
-                        </tbody>
-                    </table>
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.clockOutTime ? new Date(record.clockOutTime).toLocaleTimeString() : '---'}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{totalHours}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm hidden sm:table-cell">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status === 'Late' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                                                {status}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs text-gray-500 max-w-xs truncate hidden xl:table-cell" title={record.manualEntryReason}>
+                                            {record.manualEntryReason ? <span className="text-blue-600 font-semibold">Edited</span> : '---'}
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button onClick={() => handleOpenEditModal(record)} className="text-blue-600 hover:text-blue-900">Edit</button>
+                                        </td>
+                                    </tr>
+                                   )
+                               }) : (
+                                    <tr><td colSpan={11} className="text-center py-4 text-sm text-gray-500">No attendance records in this period.</td></tr>
+                               )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             
             {/* Absences Log */}
              <div>
                 <h3 className="text-lg font-semibold text-slate-700 mb-3">Absences</h3>
-                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date of Absence</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                           {filteredAbsences.length > 0 ? filteredAbsences.map(({employee, date}) => (
-                                <tr key={`${employee.id}-${date}`}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{employee.firstName} {employee.lastName}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">{new Date(date + 'T00:00:00').toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">No attendance or approved leave.</td>
-                                </tr>
-                           )) : (
+                 <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
                                 <tr>
-                                    <td colSpan={3} className="text-center py-4 text-sm text-gray-500">No unexplained absences in this period.</td>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Notes</th>
                                 </tr>
-                           )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                               {filteredAbsences.length > 0 ? filteredAbsences.map(({employee, date}) => (
+                                    <tr key={`${employee.id}-${date}`}>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{employee.firstName} {employee.lastName}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-red-600">{new Date(date + 'T00:00:00').toLocaleDateString()}</td>
+                                        <td className="px-3 sm:px-6 py-4 text-sm text-gray-500 hidden sm:table-cell">No attendance or approved leave.</td>
+                                    </tr>
+                               )) : (
+                                    <tr>
+                                        <td colSpan={3} className="text-center py-4 text-sm text-gray-500">No unexplained absences in this period.</td>
+                                    </tr>
+                               )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             {/* Requests Log */}
             <div>
                 <h3 className="text-lg font-semibold text-slate-700 mb-3">Requests Log</h3>
-                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date Filed</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredRequests.length > 0 ? filteredRequests.map(req => {
-                                const employee = getEmployee(req.employeeId);
-                                return (
-                                <tr key={req.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{req.type}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {req.type === RequestType.LEAVE ? `${req.leaveType}: ${req.startDate} to ${req.endDate}` : req.type === RequestType.CHANGE_REQUEST ? `Update Info` : `${req.hours} hrs on ${req.date}`}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(req.dateFiled).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm"><StatusBadge status={req.status} /></td>
-                                </tr>
-                            )}) : (
+                 <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
                                 <tr>
-                                    <td colSpan={5} className="text-center py-4 text-sm text-gray-500">No requests filed in this period.</td>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Filed</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredRequests.length > 0 ? filteredRequests.map(req => {
+                                    const employee = getEmployee(req.employeeId);
+                                    return (
+                                    <tr key={req.id}>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown'}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{req.type}</td>
+                                        <td className="px-3 sm:px-6 py-4 text-sm text-gray-500">
+                                            {req.type === RequestType.LEAVE ? `${req.leaveType}: ${req.startDate} to ${req.endDate}` : req.type === RequestType.CHANGE_REQUEST ? `Update Info` : `${req.hours} hrs on ${req.date}`}
+                                        </td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">{new Date(req.dateFiled).toLocaleDateString()}</td>
+                                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><StatusBadge status={req.status} /></td>
+                                    </tr>
+                                )}) : (
+                                    <tr>
+                                        <td colSpan={5} className="text-center py-4 text-sm text-gray-500">No requests filed in this period.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             
