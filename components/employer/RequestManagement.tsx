@@ -114,9 +114,10 @@ const RequestManagement: React.FC = () => {
             const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'this employee';
             const requestTypeText = request.type.toLowerCase();
             const otUtRequest = request as OtUtRequest;
+            const holidayInfo = otUtRequest.holidayType ? ` (${otUtRequest.holidayType} Holiday Pay)` : '';
 
             if (!window.confirm(
-                `Are you sure you want to approve ${otUtRequest.hours} hours of ${requestTypeText} for ${employeeName} on ${otUtRequest.date}?`
+                `Are you sure you want to approve ${otUtRequest.hours} hours of ${requestTypeText}${holidayInfo} for ${employeeName} on ${otUtRequest.date}?`
             )) {
                 return; // Abort if manager cancels
             }
@@ -182,10 +183,15 @@ const RequestManagement: React.FC = () => {
                                     <p className="font-medium text-slate-700">
                                        {req.type === RequestType.LEAVE ? `${req.leaveType} from ${req.startDate} to ${req.endDate}` : `${req.hours} hrs on ${req.date}`}
                                     </p>
+                                    {req.holidayType && (
+                                        <p className="text-xs text-blue-600 font-semibold mt-1 bg-blue-50 px-2 py-0.5 rounded inline-block">
+                                            {req.holidayType} Holiday Pay
+                                        </p>
+                                    )}
                                     <p className="text-xs text-slate-500 mt-1">Reason: {req.reason}</p>
                                 </div>
                             )}
-                            
+
                             {req.type === RequestType.CHANGE_REQUEST && (
                                 <ChangeRequestDetails request={req} originalEmployee={employee} />
                             )}

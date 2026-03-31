@@ -183,6 +183,8 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
     const [hours, setHours] = useState<number | string>(1);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [customHolidayTypes, setCustomHolidayTypes] = useState<string[]>([]);
+    const [isHolidayPay, setIsHolidayPay] = useState(false);
+    const [holidayType, setHolidayType] = useState<'Regular' | 'Special'>('Regular');
 
     useEffect(() => {
         const fetchCustomTypes = async () => {
@@ -223,7 +225,14 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
             const request = { employeeId: user.id, type: RequestType.LEAVE, leaveType, startDate, endDate, reason };
             await api.addRequest(request);
         } else {
-            const request = { employeeId: user.id, type, date: otUtDate, hours: Number(hours), reason };
+            const request = {
+                employeeId: user.id,
+                type,
+                date: otUtDate,
+                hours: Number(hours),
+                reason,
+                holidayType: type === RequestType.OVERTIME && isHolidayPay ? holidayType : undefined
+            };
             await api.addRequest(request);
         }
         onSubmit();
@@ -268,6 +277,35 @@ const RequestForm: React.FC<{ type: RequestType; onClose: () => void; onSubmit: 
                         <input type="number" min="0.5" step="0.5" value={hours} onChange={e => setHours(e.target.value)} required className={`mt-1 input-field ${errors.hours ? 'invalid' : ''}`} />
                         {errors.hours && <p className="text-xs text-red-600 mt-1">{errors.hours}</p>}
                     </div>
+                    {type === RequestType.OVERTIME && (
+                        <>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="isHolidayPay"
+                                    checked={isHolidayPay}
+                                    onChange={e => setIsHolidayPay(e.target.checked)}
+                                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                                />
+                                <label htmlFor="isHolidayPay" className="text-sm font-medium text-slate-700">
+                                    This is Holiday Pay (worked on a holiday)
+                                </label>
+                            </div>
+                            {isHolidayPay && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700">Holiday Type</label>
+                                    <select
+                                        value={holidayType}
+                                        onChange={e => setHolidayType(e.target.value as 'Regular' | 'Special')}
+                                        className="mt-1 block w-full input-field"
+                                    >
+                                        <option value="Regular">Regular Holiday</option>
+                                        <option value="Special">Special Holiday</option>
+                                    </select>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </>
             )}
              <div>
@@ -470,7 +508,7 @@ const EmployeeDashboard: React.FC = () => {
                                             <tr key={req.id}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{req.type}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {req.type === RequestType.LEAVE ? `${req.leaveType}: ${req.startDate} to ${req.endDate}` : req.type === RequestType.CHANGE_REQUEST ? `Update Info` : `${req.hours} hrs on ${req.date}`}
+                                                    {req.type === RequestType.LEAVE ? `${req.leaveType}: ${req.startDate} to ${req.endDate}` : req.type === RequestType.CHANGE_REQUEST ? `Update Info` : `${req.hours} hrs on ${req.date}${req.holidayType ? ` (${req.holidayType} Holiday)` : ''}`}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(req.dateFiled).toLocaleDateString()}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm"><StatusBadge status={req.status} /></td>
