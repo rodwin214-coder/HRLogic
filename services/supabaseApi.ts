@@ -33,6 +33,12 @@ export const setCurrentUserEmail = async (email: string) => {
 };
 
 const ensureUserContext = async () => {
+    if (currentUserEmail) {
+        await supabase.rpc('set_config', {
+            setting_name: 'app.current_user_email',
+            setting_value: currentUserEmail
+        });
+    }
 };
 
 const generateNextEmployeeId = async (companyId: string): Promise<string> => {
