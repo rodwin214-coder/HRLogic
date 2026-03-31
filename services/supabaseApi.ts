@@ -975,6 +975,7 @@ export const updateCompanyProfile = async (profile: CompanyProfile): Promise<Com
                 tin: profile.tin,
                 logo: profile.logo,
                 work_schedule: profile.workSchedule,
+                grace_period_minutes: profile.gracePeriodMinutes,
             })
             .eq('id', currentCompanyId)
             .select()
@@ -991,6 +992,7 @@ export const updateCompanyProfile = async (profile: CompanyProfile): Promise<Com
             tin: data.tin || '',
             logo: data.logo,
             workSchedule: data.work_schedule || WorkSchedule.MONDAY_TO_FRIDAY,
+            gracePeriodMinutes: data.grace_period_minutes ?? 5,
         };
     } catch (error) {
         console.error('Error updating company profile:', error);
