@@ -507,7 +507,26 @@ export const Reports: React.FC = () => {
 
             {/* Attendance Log */}
             <div>
-                <h3 className="text-lg font-semibold text-slate-700 mb-3">Attendance Log</h3>
+                <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-slate-700">Attendance Log</h3>
+                    <button
+                        onClick={fetchData}
+                        disabled={isLoading}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {isLoading ? 'Syncing...' : 'Sync'}
+                    </button>
+                </div>
                 <div className="overflow-x-auto">
                      <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
