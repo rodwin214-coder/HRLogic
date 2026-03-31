@@ -22,16 +22,17 @@ const ProfileField: React.FC<{label: string, value?: string}> = ({label, value})
 );
 
 const EditField: React.FC<{
-    label: string, 
-    name: keyof Omit<CompanyProfileType, 'id' | 'workSchedule' | 'logo'>, 
-    value: string | undefined,
+    label: string,
+    name: keyof Omit<CompanyProfileType, 'id' | 'workSchedule' | 'logo'>,
+    value: string | number | undefined,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
-    required?: boolean, 
-    error?: string 
-}> = ({ label, name, value, onChange, required = false, error }) => (
+    required?: boolean,
+    error?: string,
+    type?: string
+}> = ({ label, name, value, onChange, required = false, error, type = 'text' }) => (
      <div>
         <label className="block text-sm font-medium text-slate-700">{label}</label>
-        <input name={name} value={value} onChange={onChange} required={required} className={`mt-1 input-field ${error ? 'invalid' : ''}`} />
+        <input type={type} name={name} value={value} onChange={onChange} required={required} className={`mt-1 input-field ${error ? 'invalid' : ''}`} />
         {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
 );
@@ -80,7 +81,8 @@ const CompanyProfile: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         if (formData) {
-            setFormData({ ...formData, [e.target.name]: e.target.value });
+            const { name, value } = e.target;
+            setFormData({ ...formData, [name]: name === 'gracePeriodMinutes' ? parseInt(value) || 0 : value });
         }
     };
 
@@ -183,6 +185,21 @@ const CompanyProfile: React.FC = () => {
                          </div>
                          <EditField label="Contact Number" name="contactNumber" value={formData.contactNumber} onChange={handleChange} />
                          <EditField label="Contact Email" name="email" value={formData.email} onChange={handleChange} error={errors.email} />
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700">Grace Period (minutes)</label>
+                            <input
+                                type="number"
+                                name="gracePeriodMinutes"
+                                min="0"
+                                max="60"
+                                value={formData.gracePeriodMinutes ?? 5}
+                                onChange={handleChange}
+                                className="mt-1 input-field"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                Employees can clock in this many minutes late and still be marked "On Time"
+                            </p>
+                        </div>
                     </div>
                     
                     {/* Action buttons */}
@@ -211,6 +228,7 @@ const CompanyProfile: React.FC = () => {
                         </div>
                         <ProfileField label="Contact Number" value={profile.contactNumber} />
                         <ProfileField label="Contact Email" value={profile.email} />
+                        <ProfileField label="Grace Period" value={`${profile.gracePeriodMinutes ?? 5} minutes`} />
                     </div>
                 </div>
             )}

@@ -197,6 +197,7 @@ export interface CompanyProfile {
     tin: string;
     logo?: string; // base64 string
     workSchedule: WorkSchedule;
+    gracePeriodMinutes?: number;
 }
 
 export interface AuditLogChange {

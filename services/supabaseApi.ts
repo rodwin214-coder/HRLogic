@@ -1321,7 +1321,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
 
     // Calculate status only for first clock-in
     if (isFirstClockIn) {
-        // Get employee's shift information
+        // Get employee's shift information and company grace period
         const { data: employee, error: empError } = await supabase
             .from('employees')
             .select('shift_id')
@@ -1333,6 +1333,12 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
                 .from('shifts')
                 .select('start_time')
                 .eq('id', employee.shift_id)
+                .maybeSingle();
+
+            const { data: company, error: companyError } = await supabase
+                .from('companies')
+                .select('grace_period_minutes')
+                .eq('id', companyId)
                 .maybeSingle();
 
             if (!shiftError && shift && shift.start_time) {
@@ -1347,8 +1353,11 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
                 const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
                 const shiftTotalMinutes = shiftHours * 60 + shiftMinutes;
 
-                // Consider on time if within 5 minutes of shift start
-                status = clockInTotalMinutes <= (shiftTotalMinutes + 5) ? 'On Time' : 'Late';
+                // Get grace period from company settings, default to 5 minutes
+                const gracePeriod = company?.grace_period_minutes ?? 5;
+
+                // Consider on time if within grace period of shift start
+                status = clockInTotalMinutes <= (shiftTotalMinutes + gracePeriod) ? 'On Time' : 'Late';
             }
         }
     }
