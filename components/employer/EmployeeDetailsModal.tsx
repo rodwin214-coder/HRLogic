@@ -220,6 +220,18 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                                         : 'Not assigned'
                                 }
                             />
+                            <ProfileField
+                                label="Status"
+                                value={employee.status}
+                            />
+                            {employee.dateTerminated && (
+                                <>
+                                    <ProfileField label="Date Terminated" value={employee.dateTerminated} />
+                                    <div className="md:col-span-3">
+                                        <ProfileField label="Termination Reason" value={employee.terminationReason} />
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
 

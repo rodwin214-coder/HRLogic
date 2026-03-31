@@ -193,6 +193,10 @@ export const Reports: React.FC = () => {
 
             if (!holidaysSet.has(dateStr)) {
                 employees.forEach(employee => {
+                    if (employee.dateTerminated && dateStr >= employee.dateTerminated) {
+                        return;
+                    }
+
                     const employeeSchedule = employee.workSchedule || companyProfile?.workSchedule;
                     let isWorkDay = false;
 

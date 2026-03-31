@@ -8,6 +8,7 @@ import EmployeeDetailsModal from './EmployeeDetailsModal';
 import AddEmployeeModal from './AddEmployeeModal';
 import BulkInviteModal from './BulkInviteModal';
 import EmployeeFilesModal from './EmployeeFilesModal';
+import TerminateEmployeeModal from './TerminateEmployeeModal';
 
 const BulkImportModal: React.FC<{onClose: () => void, onImport: () => void}> = ({ onClose, onImport }) => {
     const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -88,8 +89,10 @@ const EmployeeManagement: React.FC = () => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [selectedEmployeeForFiles, setSelectedEmployeeForFiles] = useState<Employee | null>(null);
+    const [employeeToTerminate, setEmployeeToTerminate] = useState<Employee | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+    const [showTerminated, setShowTerminated] = useState(false);
     const { user: editor } = useContext(UserContext);
     
     const fetchData = useCallback(async () => {
@@ -101,20 +104,38 @@ const EmployeeManagement: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
-    const handleStatusChange = async (employeeToUpdate: Employee, newStatus: EmployeeStatus) => {
+    const handleTerminate = (employee: Employee) => {
+        setEmployeeToTerminate(employee);
+    };
+
+    const handleConfirmTermination = async (terminationDate: string, terminationReason: string) => {
+        if (!editor || !employeeToTerminate) return;
+
+        const updatedEmployeeData = {
+            ...employeeToTerminate,
+            status: EmployeeStatus.TERMINATED,
+            dateTerminated: terminationDate,
+            terminationReason: terminationReason
+        };
+
+        await api.updateEmployee(updatedEmployeeData, editor.id);
+        setEmployeeToTerminate(null);
+        fetchData();
+    };
+
+    const handleReactivate = async (employeeToUpdate: Employee) => {
         if (!editor) {
             alert("Could not perform action: current user not identified.");
             return;
-        };
+        }
 
-        const action = newStatus === EmployeeStatus.TERMINATED ? 'terminate' : 'reactivate';
-        if (window.confirm(`Are you sure you want to ${action} ${employeeToUpdate.firstName} ${employeeToUpdate.lastName}?`)) {
-            const updatedEmployeeData = { ...employeeToUpdate, status: newStatus };
-            if (newStatus === EmployeeStatus.TERMINATED) {
-                updatedEmployeeData.dateTerminated = new Date().toISOString().split('T')[0];
-            } else if (newStatus === EmployeeStatus.ACTIVE) {
-                updatedEmployeeData.dateTerminated = undefined;
-            }
+        if (window.confirm(`Are you sure you want to reactivate ${employeeToUpdate.firstName} ${employeeToUpdate.lastName}?`)) {
+            const updatedEmployeeData = {
+                ...employeeToUpdate,
+                status: EmployeeStatus.ACTIVE,
+                dateTerminated: undefined,
+                terminationReason: undefined
+            };
             await api.updateEmployee(updatedEmployeeData, editor.id);
             fetchData();
         }
@@ -143,12 +164,20 @@ const EmployeeManagement: React.FC = () => {
     };
 
     const filteredEmployees = useMemo(() => {
-        return employees.filter(emp => 
-            `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [employees, searchTerm]);
+        return employees.filter(emp => {
+            const matchesSearch =
+                `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesStatus = showTerminated || emp.status === EmployeeStatus.ACTIVE;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [employees, searchTerm, showTerminated]);
+
+    const activeEmployeesCount = employees.filter(emp => emp.status === EmployeeStatus.ACTIVE).length;
+    const terminatedEmployeesCount = employees.filter(emp => emp.status === EmployeeStatus.TERMINATED).length;
 
     const handleSelectOne = (employeeId: string, isSelected: boolean) => {
         if (isSelected) {
@@ -166,20 +195,23 @@ const EmployeeManagement: React.FC = () => {
         }
     };
 
-    const handleBulkAction = async (newStatus: EmployeeStatus) => {
+    const handleBulkTerminate = () => {
+        alert('Bulk termination requires individual termination dates and reasons. Please terminate employees individually.');
+    };
+
+    const handleBulkReactivate = async () => {
         if (!editor || selectedEmployeeIds.length === 0) return;
 
-        const action = newStatus === EmployeeStatus.TERMINATED ? 'terminate' : 'reactivate';
-        if (window.confirm(`Are you sure you want to ${action} the ${selectedEmployeeIds.length} selected employees?`)) {
+        if (window.confirm(`Are you sure you want to reactivate the ${selectedEmployeeIds.length} selected employees?`)) {
             const updatePromises = selectedEmployeeIds.map(async (id) => {
                 const employee = employees.find(e => e.id === id);
-                if (employee && employee.status !== newStatus) {
-                    const updatedEmployeeData = { ...employee, status: newStatus };
-                    if (newStatus === EmployeeStatus.TERMINATED) {
-                        updatedEmployeeData.dateTerminated = new Date().toISOString().split('T')[0];
-                    } else if (newStatus === EmployeeStatus.ACTIVE) {
-                        updatedEmployeeData.dateTerminated = undefined;
-                    }
+                if (employee && employee.status === EmployeeStatus.TERMINATED) {
+                    const updatedEmployeeData = {
+                        ...employee,
+                        status: EmployeeStatus.ACTIVE,
+                        dateTerminated: undefined,
+                        terminationReason: undefined
+                    };
                     await api.updateEmployee(updatedEmployeeData, editor.id);
                 }
             });
@@ -200,9 +232,25 @@ const EmployeeManagement: React.FC = () => {
     return (
         <div className="card">
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                <h2 className="text-xl font-bold text-slate-800">Employee Management ({employees.length})</h2>
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800">
+                        Employee Management ({activeEmployeesCount} Active
+                        {terminatedEmployeesCount > 0 && `, ${terminatedEmployeesCount} Terminated`})
+                    </h2>
+                    <div className="flex items-center gap-2 mt-2">
+                        <label className="flex items-center text-sm text-slate-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={showTerminated}
+                                onChange={(e) => setShowTerminated(e.target.checked)}
+                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 mr-2"
+                            />
+                            Show terminated employees
+                        </label>
+                    </div>
+                </div>
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    <input 
+                    <input
                         type="text"
                         placeholder="Search employees..."
                         value={searchTerm}
@@ -225,22 +273,22 @@ const EmployeeManagement: React.FC = () => {
                 <div className="bg-slate-100 p-3 rounded-lg mb-4 flex items-center justify-between animate-fade-in">
                     <p className="text-sm font-semibold text-slate-700">{selectedEmployeeIds.length} selected</p>
                     <div className="flex items-center gap-2">
-                        <button 
-                            onClick={() => handleBulkAction(EmployeeStatus.TERMINATED)} 
+                        <button
+                            onClick={handleBulkTerminate}
                             disabled={!canTerminate}
                             className="btn btn-secondary text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed"
                         >
                             Terminate Selected
                         </button>
-                        <button 
-                            onClick={() => handleBulkAction(EmployeeStatus.ACTIVE)} 
+                        <button
+                            onClick={handleBulkReactivate}
                             disabled={!canReactivate}
                             className="btn btn-secondary text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed"
                         >
                             Reactivate Selected
                         </button>
-                        <button 
-                            onClick={handleBulkDelete} 
+                        <button
+                            onClick={handleBulkDelete}
                             className="btn btn-secondary text-xs bg-red-100 text-red-800 border-red-300 hover:bg-red-200"
                         >
                             Delete Selected
@@ -304,9 +352,9 @@ const EmployeeManagement: React.FC = () => {
                                         Files
                                     </button>
                                     {employee.status === EmployeeStatus.ACTIVE ? (
-                                        <button onClick={() => handleStatusChange(employee, EmployeeStatus.TERMINATED)} className="ml-4 text-orange-600 hover:text-orange-900">Terminate</button>
+                                        <button onClick={() => handleTerminate(employee)} className="ml-4 text-orange-600 hover:text-orange-900">Terminate</button>
                                     ) : (
-                                        <button onClick={() => handleStatusChange(employee, EmployeeStatus.ACTIVE)} className="ml-4 text-green-600 hover:text-green-900">Reactivate</button>
+                                        <button onClick={() => handleReactivate(employee)} className="ml-4 text-green-600 hover:text-green-900">Reactivate</button>
                                     )}
                                     <button onClick={() => handleDelete(employee)} className="ml-4 text-red-600 hover:text-red-900">Delete</button>
                                 </td>
@@ -354,6 +402,13 @@ const EmployeeManagement: React.FC = () => {
                     employee={selectedEmployeeForFiles}
                     currentUserId={editor.id}
                     onClose={() => setSelectedEmployeeForFiles(null)}
+                />
+            )}
+            {employeeToTerminate && (
+                <TerminateEmployeeModal
+                    employee={employeeToTerminate}
+                    onClose={() => setEmployeeToTerminate(null)}
+                    onConfirm={handleConfirmTermination}
                 />
             )}
         </div>

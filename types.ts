@@ -108,6 +108,7 @@ export interface Employee {
     philhealthNumber: string;
     dateHired: string;
     dateTerminated?: string;
+    terminationReason?: string;
     status: EmployeeStatus;
     employmentType: EmploymentType;
     salaryHistory: SalaryHistoryRecord[];

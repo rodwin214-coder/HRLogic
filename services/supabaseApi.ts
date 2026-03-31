@@ -371,6 +371,7 @@ const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> =
         philhealthNumber: dbEmployee.philhealth_number || '',
         dateHired: dbEmployee.date_hired || '',
         dateTerminated: dbEmployee.date_terminated,
+        terminationReason: dbEmployee.termination_reason,
         status: dbEmployee.status || EmployeeStatus.ACTIVE,
         employmentType: dbEmployee.employment_type || EmploymentType.PROBATIONARY,
         salaryHistory: (salaryHistory || []).map((s: any) => ({
@@ -648,6 +649,7 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
                 philhealth_number: updatedEmployee.philhealthNumber,
                 date_hired: updatedEmployee.dateHired,
                 date_terminated: updatedEmployee.dateTerminated || null,
+                termination_reason: updatedEmployee.terminationReason || null,
                 status: updatedEmployee.status,
                 employment_type: updatedEmployee.employmentType,
                 shift_id: updatedEmployee.shiftId || null,
