@@ -959,6 +959,7 @@ export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
             tin: data.tin || '',
             logo: data.logo,
             workSchedule: data.work_schedule || WorkSchedule.MONDAY_TO_FRIDAY,
+            gracePeriodMinutes: data.grace_period_minutes ?? 5,
         };
     } catch (error) {
         console.error('Error fetching company profile:', error);

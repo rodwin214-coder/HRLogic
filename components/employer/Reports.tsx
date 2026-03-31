@@ -52,22 +52,27 @@ export const Reports: React.FC = () => {
     const [endDate, setEndDate] = useState(lastDayOfMonth);
 
     const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        const [attendanceData, employeesData, shiftsData, requestsData, holidaysData, profileData] = await Promise.all([
-            api.getAttendance(startDate, endDate),
-            api.getEmployees(),
-            api.getShifts(),
-            api.getRequests(),
-            api.getHolidays(),
-            api.getCompanyProfile()
-        ]);
-        setAttendance(attendanceData);
-        setEmployees(employeesData);
-        setShifts(shiftsData);
-        setRequests(requestsData);
-        setHolidays(holidaysData);
-        setCompanyProfile(profileData);
-        setIsLoading(false);
+        try {
+            setIsLoading(true);
+            const [attendanceData, employeesData, shiftsData, requestsData, holidaysData, profileData] = await Promise.all([
+                api.getAttendance(startDate, endDate),
+                api.getEmployees(),
+                api.getShifts(),
+                api.getRequests(),
+                api.getHolidays(),
+                api.getCompanyProfile()
+            ]);
+            setAttendance(attendanceData);
+            setEmployees(employeesData);
+            setShifts(shiftsData);
+            setRequests(requestsData);
+            setHolidays(holidaysData);
+            setCompanyProfile(profileData);
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        } finally {
+            setIsLoading(false);
+        }
     }, [startDate, endDate]);
 
     useEffect(() => {
