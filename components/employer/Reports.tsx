@@ -36,6 +36,7 @@ export const Reports: React.FC = () => {
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [recordToEdit, setRecordToEdit] = useState<AttendanceRecord | undefined>(undefined);
     const [selectedImage, setSelectedImage] = useState<{ src: string; label: string } | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Payroll state
     const [payrollSummary, setPayrollSummary] = useState<PayrollSummaryItem[]>([]);
@@ -51,6 +52,7 @@ export const Reports: React.FC = () => {
     const [endDate, setEndDate] = useState(lastDayOfMonth);
 
     const fetchData = useCallback(async () => {
+        setIsLoading(true);
         const [attendanceData, employeesData, shiftsData, requestsData, holidaysData, profileData] = await Promise.all([
             api.getAttendance(startDate, endDate),
             api.getEmployees(),
@@ -65,6 +67,7 @@ export const Reports: React.FC = () => {
         setRequests(requestsData);
         setHolidays(holidaysData);
         setCompanyProfile(profileData);
+        setIsLoading(false);
     }, [startDate, endDate]);
 
     useEffect(() => {
@@ -523,7 +526,9 @@ export const Reports: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                           {filteredAttendance.length > 0 ? filteredAttendance.map(record => {
+                           {isLoading ? (
+                                <tr><td colSpan={11} className="text-center py-8"><div className="flex items-center justify-center gap-2"><svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span className="text-sm text-gray-600">Loading attendance records...</span></div></td></tr>
+                           ) : filteredAttendance.length > 0 ? filteredAttendance.map(record => {
                                const { totalHours, status } = calculateStatus(record);
                                const employee = getEmployee(record.employeeId);
                                return (
