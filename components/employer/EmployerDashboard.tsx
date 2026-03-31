@@ -91,13 +91,13 @@ const EmployerDashboard: React.FC = () => {
                             )}
                         </div>
                     </TabButton>
-                    <TabButton tabId="employees">Employees</TabButton>
                     <TabButton tabId="reports">Reports</TabButton>
-                    <TabButton tabId="company">Company Profile</TabButton>
+                    <TabButton tabId="employees">Employees</TabButton>
+                    <TabButton tabId="calendar">Holidays</TabButton>
                     <TabButton tabId="shifts">Shifts</TabButton>
                     <TabButton tabId="leavePolicy">Leave Policy</TabButton>
                     <TabButton tabId="customFields">Custom Fields</TabButton>
-                    <TabButton tabId="calendar">Holidays</TabButton>
+                    <TabButton tabId="company">Company Profile</TabButton>
                 </nav>
             </div>
 
