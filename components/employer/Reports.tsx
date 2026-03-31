@@ -164,33 +164,36 @@ export const Reports: React.FC = () => {
         let currentDay = new Date(startDate + 'T00:00:00');
         const endDay = new Date(endDate + 'T00:00:00');
         const today = new Date(todayStr + 'T00:00:00');
-        const workSchedule = companyProfile?.workSchedule;
 
         while (currentDay <= endDay && currentDay < today) {
             const dayOfWeek = currentDay.getDay(); // Sun=0, ..., Sat=6
             const dateStr = currentDay.toISOString().split('T')[0];
 
-            let isWorkDay = false;
-            switch (workSchedule) {
-                case WorkSchedule.MONDAY_TO_SATURDAY:
-                    isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 6;
-                    break;
-                case WorkSchedule.MONDAY_TO_SUNDAY:
-                    isWorkDay = true;
-                    break;
-                case WorkSchedule.MONDAY_TO_FRIDAY:
-                default:
-                    isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-                    break;
-            }
-
-            if (isWorkDay && !holidaysSet.has(dateStr)) {
+            if (!holidaysSet.has(dateStr)) {
                 employees.forEach(employee => {
-                    const hasAttendance = attendanceMap.get(employee.id)?.has(dateStr);
-                    const isOnLeave = onLeaveMap.get(employee.id)?.has(dateStr);
+                    const employeeSchedule = employee.workSchedule || companyProfile?.workSchedule;
+                    let isWorkDay = false;
 
-                    if (!hasAttendance && !isOnLeave) {
-                        absences.push({ employee, date: dateStr });
+                    switch (employeeSchedule) {
+                        case WorkSchedule.MONDAY_TO_SATURDAY:
+                            isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 6;
+                            break;
+                        case WorkSchedule.MONDAY_TO_SUNDAY:
+                            isWorkDay = true;
+                            break;
+                        case WorkSchedule.MONDAY_TO_FRIDAY:
+                        default:
+                            isWorkDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+                            break;
+                    }
+
+                    if (isWorkDay) {
+                        const hasAttendance = attendanceMap.get(employee.id)?.has(dateStr);
+                        const isOnLeave = onLeaveMap.get(employee.id)?.has(dateStr);
+
+                        if (!hasAttendance && !isOnLeave) {
+                            absences.push({ employee, date: dateStr });
+                        }
                     }
                 });
             }
@@ -220,6 +223,55 @@ export const Reports: React.FC = () => {
         return { totalHours, status };
     };
     
+    const exportPayrollHours = () => {
+        const csvContent = "data:text/csv;charset=utf-8,";
+        const fileName = `payroll_hours_${startDate}_to_${endDate}.csv`;
+        const escapeCSV = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
+
+        const employeeHoursMap = new Map<string, { employee: Employee; totalMinutes: number; sessions: number }>();
+
+        filteredAttendance.forEach(record => {
+            if (record.clockOutTime) {
+                const employee = getEmployee(record.employeeId);
+                if (employee) {
+                    const clockIn = new Date(record.clockInTime);
+                    const clockOut = new Date(record.clockOutTime);
+                    const diffMinutes = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60);
+
+                    const current = employeeHoursMap.get(employee.id) || { employee, totalMinutes: 0, sessions: 0 };
+                    current.totalMinutes += diffMinutes;
+                    current.sessions += 1;
+                    employeeHoursMap.set(employee.id, current);
+                }
+            }
+        });
+
+        let csvData = "Employee ID,Employee Name,Email,Total Hours,Total Sessions\n";
+
+        Array.from(employeeHoursMap.values())
+            .sort((a, b) => a.employee.employeeId.localeCompare(b.employee.employeeId))
+            .forEach(({ employee, totalMinutes, sessions }) => {
+                const totalHours = (totalMinutes / 60).toFixed(2);
+                const employeeName = `${employee.firstName} ${employee.lastName}`;
+                csvData += [
+                    employee.employeeId,
+                    employeeName,
+                    employee.email,
+                    totalHours,
+                    sessions
+                ].map(escapeCSV).join(",") + "\n";
+            });
+
+        const encodedUri = encodeURI(csvContent + csvData);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setIsExportMenuOpen(false);
+    };
+
     const exportToCSV = (exportType: 'all' | 'attendance' | 'requests' | 'absences') => {
         let csvContent = "data:text/csv;charset=utf-8,";
         let fileName = `report_${startDate}_to_${endDate}.csv`;
@@ -411,6 +463,7 @@ export const Reports: React.FC = () => {
                                     <button onClick={() => exportToCSV('attendance')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Attendance Only</button>
                                     <button onClick={() => exportToCSV('requests')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Requests Only</button>
                                     <button onClick={() => exportToCSV('absences')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Absences Only</button>
+                                    <button onClick={exportPayrollHours} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t">Payroll Hours</button>
                                 </div>
                             )}
                         </div>

@@ -8,6 +8,7 @@ import HolidayCalendar from '../employer/HolidayCalendar';
 import EmployeeReport from './EmployeeReport';
 import EmployeeProfile from './EmployeeProfile';
 import CompleteProfileModal from './CompleteProfileModal';
+import NotificationBell from '../common/NotificationBell';
 
 const MyTasks: React.FC = () => {
     const { user } = useContext(UserContext);
@@ -420,12 +421,15 @@ const EmployeeDashboard: React.FC = () => {
                         <p className="text-slate-500">{companyProfile?.name || 'WorkLogix'} - Employee Dashboard</p>
                     </div>
                 </div>
-                <button 
-                    onClick={logout} 
-                    className="btn btn-secondary"
-                >
-                    Log Out
-                </button>
+                <div className="flex items-center gap-2">
+                    {user && <NotificationBell userId={user.id} />}
+                    <button
+                        onClick={logout}
+                        className="btn btn-secondary"
+                    >
+                        Log Out
+                    </button>
+                </div>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

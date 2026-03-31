@@ -1104,6 +1104,52 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
             .single();
 
         if (error) throw error;
+
+        const { data: employee } = await supabase
+            .from('employees')
+            .select('first_name, last_name')
+            .eq('id', requestData.employeeId)
+            .maybeSingle();
+
+        if (employee && currentCompanyId) {
+            const employeeName = `${employee.first_name} ${employee.last_name}`;
+            let requestTypeText = data.request_type;
+            let requestDetails = '';
+
+            if (data.request_type === RequestType.LEAVE) {
+                requestDetails = `${data.leave_type} from ${data.start_date} to ${data.end_date}`;
+            } else if (data.request_type === RequestType.OVERTIME || data.request_type === RequestType.UNDERTIME) {
+                requestDetails = `${data.hours} hours on ${data.date}`;
+            }
+
+            const { data: employers } = await supabase
+                .from('employees')
+                .select('id')
+                .eq('company_id', currentCompanyId)
+                .eq('role', 'employer');
+
+            if (employers && employers.length > 0) {
+                for (const employer of employers) {
+                    const { data: settings } = await supabase
+                        .from('notification_settings')
+                        .select('notify_on_request')
+                        .eq('user_id', employer.id)
+                        .maybeSingle();
+
+                    if (!settings || settings.notify_on_request !== false) {
+                        await createNotification(
+                            currentCompanyId,
+                            employer.id,
+                            'New Request Pending',
+                            `${employeeName} submitted a ${requestTypeText} request${requestDetails ? ': ' + requestDetails : ''}`,
+                            'request_pending',
+                            { requestId: data.id, employeeId: requestData.employeeId, requestType: data.request_type }
+                        );
+                    }
+                }
+            }
+        }
+
         return {
             id: data.id,
             employeeId: data.employee_id,
@@ -1379,6 +1425,43 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
         console.error('Clock in error:', error);
         throw error;
     }
+
+    const { data: employee } = await supabase
+        .from('employees')
+        .select('first_name, last_name')
+        .eq('id', record.employeeId)
+        .maybeSingle();
+
+    const employeeName = employee ? `${employee.first_name} ${employee.last_name}` : 'Employee';
+    const clockInTimeFormatted = new Date(record.clockInTime).toLocaleTimeString();
+
+    const { data: employers } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('role', 'employer');
+
+    if (employers && employers.length > 0) {
+        for (const employer of employers) {
+            const { data: settings } = await supabase
+                .from('notification_settings')
+                .select('notify_on_clock_in')
+                .eq('user_id', employer.id)
+                .maybeSingle();
+
+            if (!settings || settings.notify_on_clock_in !== false) {
+                await createNotification(
+                    companyId,
+                    employer.id,
+                    'Employee Clocked In',
+                    `${employeeName} clocked in at ${clockInTimeFormatted}${status ? ` (${status})` : ''}`,
+                    'clock_in',
+                    { employeeId: record.employeeId, status, clockInTime: record.clockInTime }
+                );
+            }
+        }
+    }
+
     return {
         id: data.id,
         employeeId: data.employee_id,
@@ -1427,6 +1510,49 @@ export const clockOut = async (
             .single();
 
         if (error) throw error;
+
+        const { data: employee } = await supabase
+            .from('employees')
+            .select('first_name, last_name, company_id')
+            .eq('id', employeeId)
+            .maybeSingle();
+
+        if (employee) {
+            const employeeName = `${employee.first_name} ${employee.last_name}`;
+            const clockOutTimeFormatted = new Date().toLocaleTimeString();
+            const clockInTime = new Date(data.clock_in_time);
+            const clockOutTime = new Date(data.clock_out_time);
+            const diffMs = clockOutTime.getTime() - clockInTime.getTime();
+            const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+
+            const { data: employers } = await supabase
+                .from('employees')
+                .select('id')
+                .eq('company_id', employee.company_id)
+                .eq('role', 'employer');
+
+            if (employers && employers.length > 0) {
+                for (const employer of employers) {
+                    const { data: settings } = await supabase
+                        .from('notification_settings')
+                        .select('notify_on_clock_out')
+                        .eq('user_id', employer.id)
+                        .maybeSingle();
+
+                    if (!settings || settings.notify_on_clock_out !== false) {
+                        await createNotification(
+                            employee.company_id,
+                            employer.id,
+                            'Employee Clocked Out',
+                            `${employeeName} clocked out at ${clockOutTimeFormatted} (${totalHours} hours)`,
+                            'clock_out',
+                            { employeeId, clockOutTime: data.clock_out_time, totalHours }
+                        );
+                    }
+                }
+            }
+        }
+
         return {
             id: data.id,
             employeeId: data.employee_id,
@@ -2457,6 +2583,139 @@ export const deleteEmployeeFile = async (fileId: string): Promise<void> => {
     } catch (error) {
         console.error('Error deleting employee file:', error);
         throw error;
+    }
+};
+
+// Notifications API
+export const createNotification = async (
+    companyId: string,
+    userId: string,
+    title: string,
+    message: string,
+    type: string,
+    data: Record<string, any> = {}
+): Promise<void> => {
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .insert([{
+                company_id: companyId,
+                user_id: userId,
+                title,
+                message,
+                type,
+                data,
+                is_read: false
+            }]);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error creating notification:', error);
+    }
+};
+
+export const getNotifications = async (userId: string): Promise<any[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+        return data || [];
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        return [];
+    }
+};
+
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', notificationId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error marking notification as read:', error);
+    }
+};
+
+export const markAllNotificationsAsRead = async (userId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('user_id', userId)
+            .eq('is_read', false);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error marking all notifications as read:', error);
+    }
+};
+
+export const deleteNotification = async (notificationId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('id', notificationId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+    }
+};
+
+export const getNotificationSettings = async (userId: string): Promise<any> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('notification_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error('Error fetching notification settings:', error);
+        return null;
+    }
+};
+
+export const updateNotificationSettings = async (
+    userId: string,
+    companyId: string,
+    settings: {
+        notify_on_clock_in?: boolean;
+        notify_on_clock_out?: boolean;
+        notify_on_request?: boolean;
+        notify_on_missed_clock_out?: boolean;
+    }
+): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabase
+            .from('notification_settings')
+            .upsert({
+                user_id: userId,
+                company_id: companyId,
+                ...settings,
+                updated_at: new Date().toISOString()
+            });
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error updating notification settings:', error);
     }
 };
 

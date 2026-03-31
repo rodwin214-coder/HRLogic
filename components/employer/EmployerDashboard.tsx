@@ -12,6 +12,7 @@ import { UserContext } from '../../App';
 import * as api from '../../services/supabaseApi';
 import { CompanyProfile as CompanyProfileType, RequestStatus } from '../../types';
 import CustomFieldsSetup from './CustomFieldsSetup';
+import NotificationBell from '../common/NotificationBell';
 
 type Tab = 'notifications' | 'employees' | 'reports' | 'company' | 'shifts' | 'leavePolicy' | 'calendar' | 'customFields';
 
@@ -56,7 +57,7 @@ const EmployerDashboard: React.FC = () => {
             <header className="mb-8 flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div className="flex items-center gap-4">
                     {companyProfile && (
-                         <img 
+                         <img
                             src={companyProfile.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(companyProfile.name)}&background=0D8ABC&color=fff&size=64`}
                             alt={`${companyProfile.name} logo`}
                             className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md"
@@ -67,12 +68,15 @@ const EmployerDashboard: React.FC = () => {
                         <p className="text-slate-500">Welcome back, {user?.firstName}!</p>
                     </div>
                 </div>
-                <button 
-                    onClick={logout} 
-                    className="btn btn-secondary"
-                >
-                    Log Out
-                </button>
+                <div className="flex items-center gap-2">
+                    {user && <NotificationBell userId={user.id} />}
+                    <button
+                        onClick={logout}
+                        className="btn btn-secondary"
+                    >
+                        Log Out
+                    </button>
+                </div>
             </header>
             
             <div className="mb-6">
