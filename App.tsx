@@ -124,7 +124,7 @@ const App: React.FC = () => {
         if (!currentUser.user) { // Only validate when login form is visible
              validate();
         }
-    }, [companyCode, companyName, firstName, lastName, email, password, isRegistering, validate, currentUser]);
+    }, [companyCode, companyName, firstName, lastName, email, password, isRegistering, currentUser.user]);
 
     const handleLogin = useCallback(async () => {
         setApiError('');
