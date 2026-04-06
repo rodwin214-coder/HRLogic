@@ -67,6 +67,10 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
     const [formData, setFormData] = useState(employee);
     const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
     const [shifts, setShifts] = useState<Shift[]>([]);
+    const [showPassword, setShowPassword] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [isEditingPassword, setIsEditingPassword] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
 
     useEffect(() => {
         if (!isEditing) {
@@ -118,17 +122,41 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
         }
     };
 
-    const handleResetPassword = () => {
-        if (window.confirm(`Are you sure you want to reset the password for ${employee.firstName} ${employee.lastName}? An email will be sent to them with a new temporary password.`)) {
-            if (!editor) return;
-            const result = api.resetEmployeePassword(employee.id, editor.id);
+    const handleViewPassword = async () => {
+        if (showPassword) {
+            setShowPassword(false);
+            setCurrentPassword('');
+            return;
+        }
+
+        const passwordHash = await api.getEmployeePassword(employee.id);
+        if (passwordHash) {
+            setCurrentPassword(passwordHash);
+            setShowPassword(true);
+        } else {
+            alert('Unable to retrieve password.');
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        if (!newPassword || newPassword.length < 8) {
+            alert('Password must be at least 8 characters long.');
+            return;
+        }
+
+        if (window.confirm(`Are you sure you want to update the password for ${employee.firstName} ${employee.lastName}?`)) {
+            const result = await api.updateEmployeePassword(employee.id, newPassword);
             if (result.success) {
-                alert('Password has been reset successfully.');
+                alert('Password updated successfully.');
+                setIsEditingPassword(false);
+                setNewPassword('');
+                setShowPassword(false);
+                setCurrentPassword('');
             } else {
                 alert(`Error: ${result.message}`);
             }
         }
-    }
+    };
 
     return (
         <div className="space-y-6">
@@ -259,11 +287,59 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
                     )}
                      {/* Security Actions */}
                     <div className="pt-4">
-                        <h4 className="text-md font-semibold text-slate-600 border-b pb-1 mb-3">Security Actions</h4>
-                        <button onClick={handleResetPassword} className="btn btn-secondary text-sm border-red-300 text-red-700 hover:bg-red-50">
-                            Reset Employee Password
-                        </button>
-                        <p className="text-xs text-slate-500 mt-1">This will generate a new temporary password ('password123') and email it to the employee.</p>
+                        <h4 className="text-md font-semibold text-slate-600 border-b pb-1 mb-3">Password Management</h4>
+                        <div className="space-y-3">
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleViewPassword}
+                                    className="btn btn-secondary text-sm"
+                                >
+                                    {showPassword ? 'Hide Password' : 'View Password Hash'}
+                                </button>
+                                <button
+                                    onClick={() => setIsEditingPassword(!isEditingPassword)}
+                                    className="btn btn-secondary text-sm"
+                                >
+                                    {isEditingPassword ? 'Cancel Edit' : 'Change Password'}
+                                </button>
+                            </div>
+
+                            {showPassword && currentPassword && (
+                                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                    <p className="text-xs font-medium text-slate-600 mb-1">Current Password Hash:</p>
+                                    <p className="text-xs text-slate-700 font-mono break-all">{currentPassword}</p>
+                                    <p className="text-xs text-slate-500 mt-2">Note: This is the bcrypt hash of the password, not the actual password.</p>
+                                </div>
+                            )}
+
+                            {isEditingPassword && (
+                                <div className="bg-blue-50 p-3 rounded border border-blue-200 space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                                            New Password (min 8 characters)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            className="input-field text-sm w-full"
+                                            placeholder="Enter new password"
+                                            minLength={8}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleUpdatePassword}
+                                        className="btn btn-primary text-sm"
+                                        disabled={!newPassword || newPassword.length < 8}
+                                    >
+                                        Update Password
+                                    </button>
+                                    <p className="text-xs text-slate-600">
+                                        This will immediately update the employee's password. The employee can use this new password to log in.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

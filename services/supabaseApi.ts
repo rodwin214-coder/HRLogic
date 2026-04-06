@@ -2463,6 +2463,24 @@ export const requestPasswordReminder = async (companyCode: string, email: string
             return { success: false, message: 'Employee profile not found.' };
         }
 
+        const resetToken = crypto.randomUUID() + '-' + Date.now().toString(36);
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+        const { error: tokenError } = await supabase
+            .from('password_reset_tokens')
+            .insert({
+                company_id: company.id,
+                employee_id: account.employee_id,
+                email: email,
+                token: resetToken,
+                expires_at: expiresAt
+            });
+
+        if (tokenError) {
+            console.error('Error creating reset token:', tokenError);
+            return { success: false, message: 'Failed to create password reset token.' };
+        }
+
         const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-password-reset-email`;
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -2475,6 +2493,7 @@ export const requestPasswordReminder = async (companyCode: string, email: string
                 employeeName: `${employee.first_name} ${employee.last_name}`,
                 companyName: company.name,
                 companyCode: company.company_code,
+                resetToken: resetToken
             }),
         });
 
@@ -2484,7 +2503,7 @@ export const requestPasswordReminder = async (companyCode: string, email: string
 
         return {
             success: true,
-            message: 'Password reset instructions have been sent to your email. Please contact your employer to reset your password.'
+            message: 'Password reset instructions have been sent to your email.'
         };
     } catch (error: any) {
         console.error('Error requesting password reminder:', error);
@@ -2492,6 +2511,118 @@ export const requestPasswordReminder = async (companyCode: string, email: string
             success: false,
             message: 'Failed to send password reminder. Please try again or contact your employer.'
         };
+    }
+};
+
+export const validateResetToken = async (token: string): Promise<{ valid: boolean, email?: string, companyCode?: string }> => {
+    try {
+        const { data: resetToken } = await supabase
+            .from('password_reset_tokens')
+            .select('email, company_id, expires_at, used_at')
+            .eq('token', token)
+            .maybeSingle();
+
+        if (!resetToken) {
+            return { valid: false };
+        }
+
+        if (resetToken.used_at) {
+            return { valid: false };
+        }
+
+        if (new Date(resetToken.expires_at) < new Date()) {
+            return { valid: false };
+        }
+
+        const { data: company } = await supabase
+            .from('companies')
+            .select('company_code')
+            .eq('id', resetToken.company_id)
+            .single();
+
+        return {
+            valid: true,
+            email: resetToken.email,
+            companyCode: company?.company_code
+        };
+    } catch (error) {
+        console.error('Error validating reset token:', error);
+        return { valid: false };
+    }
+};
+
+export const resetPasswordWithToken = async (token: string, newPassword: string): Promise<{ success: boolean, message: string }> => {
+    try {
+        const { data: resetToken } = await supabase
+            .from('password_reset_tokens')
+            .select('*')
+            .eq('token', token)
+            .maybeSingle();
+
+        if (!resetToken || resetToken.used_at || new Date(resetToken.expires_at) < new Date()) {
+            return { success: false, message: 'Invalid or expired reset token.' };
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        const { error: updateError } = await supabase
+            .from('user_accounts')
+            .update({ password_hash: hashedPassword })
+            .eq('company_id', resetToken.company_id)
+            .eq('email', resetToken.email);
+
+        if (updateError) {
+            console.error('Error updating password:', updateError);
+            return { success: false, message: 'Failed to update password.' };
+        }
+
+        await supabase
+            .from('password_reset_tokens')
+            .update({ used_at: new Date().toISOString() })
+            .eq('token', token);
+
+        return { success: true, message: 'Password has been reset successfully.' };
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        return { success: false, message: 'Failed to reset password.' };
+    }
+};
+
+export const getEmployeePassword = async (employeeId: string): Promise<string | null> => {
+    try {
+        await ensureUserContext();
+        const { data: account } = await supabase
+            .from('user_accounts')
+            .select('password_hash')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+
+        return account?.password_hash || null;
+    } catch (error) {
+        console.error('Error getting employee password:', error);
+        return null;
+    }
+};
+
+export const updateEmployeePassword = async (employeeId: string, newPassword: string): Promise<{ success: boolean, message: string }> => {
+    try {
+        await ensureUserContext();
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        const { error } = await supabase
+            .from('user_accounts')
+            .update({ password_hash: hashedPassword })
+            .eq('employee_id', employeeId);
+
+        if (error) {
+            console.error('Error updating employee password:', error);
+            return { success: false, message: 'Failed to update password.' };
+        }
+
+        return { success: true, message: 'Password updated successfully.' };
+    } catch (error) {
+        console.error('Error updating employee password:', error);
+        return { success: false, message: 'Failed to update password.' };
     }
 };
 

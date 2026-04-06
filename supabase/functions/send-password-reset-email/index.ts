@@ -11,6 +11,7 @@ interface PasswordResetEmailRequest {
   employeeName: string;
   companyName: string;
   companyCode: string;
+  resetToken: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -22,7 +23,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { employeeEmail, employeeName, companyName, companyCode }: PasswordResetEmailRequest = await req.json();
+    const { employeeEmail, employeeName, companyName, companyCode, resetToken }: PasswordResetEmailRequest = await req.json();
 
     // Get Resend API key from environment
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
@@ -80,6 +81,23 @@ Deno.serve(async (req: Request) => {
 
       <p>We received a request to reset your password for your WorkLogix account at <strong>${companyName}</strong>.</p>
 
+      <div class="info">
+        <strong>🔐 Reset Your Password:</strong>
+        <p style="margin: 10px 0;">Click the button below to reset your password. This link will expire in 1 hour.</p>
+        <div style="text-align: center; margin: 20px 0;">
+          <a href="${Deno.env.get('APP_URL') || 'http://localhost:5173'}?reset_token=${resetToken}"
+             style="background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+            Reset Password
+          </a>
+        </div>
+        <p style="margin: 10px 0; font-size: 12px; color: #6b7280;">
+          Or copy and paste this link into your browser:<br>
+          <span style="background-color: #f3f4f6; padding: 8px; border-radius: 4px; display: inline-block; margin-top: 5px; word-break: break-all;">
+            ${Deno.env.get('APP_URL') || 'http://localhost:5173'}?reset_token=${resetToken}
+          </span>
+        </p>
+      </div>
+
       <div class="credentials">
         <h3>Your Account Information</h3>
 
@@ -95,17 +113,7 @@ Deno.serve(async (req: Request) => {
       </div>
 
       <div class="warning">
-        <strong>⚠️ Security Notice:</strong> For security reasons, passwords cannot be reset via email. Please contact your employer or system administrator to reset your password.
-      </div>
-
-      <div class="info">
-        <strong>📋 What to do next:</strong>
-        <ol style="margin: 10px 0; padding-left: 20px;">
-          <li>Contact your employer or HR department</li>
-          <li>Request a password reset for your account</li>
-          <li>They will provide you with a new temporary password</li>
-          <li>Log in with the temporary password and change it immediately</li>
-        </ol>
+        <strong>⚠️ Security Notice:</strong> This password reset link will expire in 1 hour and can only be used once. If you did not request this reset, please ignore this email or contact your employer.
       </div>
 
       <p><strong>Did not request a password reset?</strong></p>

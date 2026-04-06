@@ -5,6 +5,7 @@ import { UserRole, Employee } from './types';
 import * as api from './services/supabaseApi';
 import { WORKLOGIX_LOGO_BASE64 } from './services/supabaseApi';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
+import ResetPasswordPage from './components/common/ResetPasswordPage';
 
 const EmployeeDashboard = lazy(() => import('./components/employee/EmployeeDashboard'));
 const EmployerDashboard = lazy(() => import('./components/employer/EmployerDashboard'));
@@ -34,6 +35,7 @@ const App: React.FC = () => {
     const [isRegistering, setIsRegistering] = useState(false);
     const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [resetToken, setResetToken] = useState<string | null>(null);
 
     // Form state
     const [companyCode, setCompanyCode] = useState('');
@@ -48,6 +50,15 @@ const App: React.FC = () => {
 
     // Check for a logged-in user in localStorage on initial load
     useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('reset_token');
+
+        if (token) {
+            setResetToken(token);
+            setIsLoading(false);
+            return;
+        }
+
         const loggedInUserId = localStorage.getItem('loggedInUserId');
         const loggedInCompanyCode = localStorage.getItem('loggedInCompanyCode');
         const loggedInEmail = localStorage.getItem('loggedInEmail');
@@ -216,6 +227,13 @@ const App: React.FC = () => {
     }), [currentUser, handleLogout, refreshUser]);
 
     const isFormValid = Object.keys(errors).length === 0;
+
+    if (resetToken) {
+        return <ResetPasswordPage token={resetToken} onSuccess={() => {
+            setResetToken(null);
+            window.history.replaceState({}, '', '/');
+        }} />;
+    }
 
     if (isLoading) {
         return (
