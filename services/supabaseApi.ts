@@ -526,21 +526,8 @@ export const inviteEmployee = async (employeeData: {
     shiftId?: string;
 }): Promise<Employee | { error: string }> => {
     try {
-        await ensureUserContext();
-        if (!currentCompanyId) {
+        if (!currentCompanyId || !currentUserEmail) {
             return { error: 'Company not found. Please log in again.' };
-        }
-
-        // Check if email already exists in the company
-        const { data: existingAccount } = await supabase
-            .from('user_accounts')
-            .select('email')
-            .eq('company_id', currentCompanyId)
-            .eq('email', employeeData.email)
-            .maybeSingle();
-
-        if (existingAccount) {
-            return { error: 'An employee with this email already exists in your company.' };
         }
 
         // Generate sequential employee ID
@@ -550,38 +537,28 @@ export const inviteEmployee = async (employeeData: {
         const defaultPassword = 'qwerty123';
         const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-        // Create employee record
-        const { data: newEmployee, error: employeeError } = await supabase
-            .from('employees')
-            .insert([{
-                company_id: currentCompanyId,
-                employee_id: generatedEmployeeId,
-                email: employeeData.email,
-                first_name: employeeData.firstName,
-                last_name: employeeData.lastName,
-                department: employeeData.department,
-                date_hired: new Date().toISOString().split('T')[0],
-                status: EmployeeStatus.ACTIVE,
-                employment_type: EmploymentType.PROBATIONARY,
-                shift_id: employeeData.shiftId || null,
-            }])
-            .select()
-            .single();
+        // Atomically create employee + user account in one DB transaction
+        const { data: newEmployee, error: rpcError } = await supabase.rpc('create_employee_with_account', {
+            p_caller_email: currentUserEmail,
+            p_company_id: currentCompanyId,
+            p_employee_id: generatedEmployeeId,
+            p_email: employeeData.email,
+            p_first_name: employeeData.firstName,
+            p_last_name: employeeData.lastName,
+            p_role: UserRole.EMPLOYEE,
+            p_department: employeeData.department,
+            p_password_hash: passwordHash,
+            p_shift_id: employeeData.shiftId || null,
+            p_date_hired: new Date().toISOString().split('T')[0],
+            p_employment_type: EmploymentType.PROBATIONARY,
+        });
 
-        if (employeeError) throw employeeError;
-
-        // Create user account
-        const { error: accountError } = await supabase
-            .from('user_accounts')
-            .insert([{
-                company_id: currentCompanyId,
-                employee_id: newEmployee.id,
-                email: employeeData.email,
-                password_hash: passwordHash,
-                role: UserRole.EMPLOYEE,
-            }]);
-
-        if (accountError) throw accountError;
+        if (rpcError) {
+            if (rpcError.message?.includes('DUPLICATE_EMAIL')) {
+                return { error: 'An employee with this email already exists in your company.' };
+            }
+            throw rpcError;
+        }
 
         // Send invitation email
         try {
@@ -871,58 +848,27 @@ export const bulkImportEmployees = async (csvData: string): Promise<{ successCou
                 continue;
             }
 
-            // Check if email already exists
-            const { data: existingAccount } = await supabase
-                .from('user_accounts')
-                .select('email')
-                .eq('company_id', currentCompanyId)
-                .eq('email', entry.email)
-                .maybeSingle();
-
-            if (existingAccount) {
-                results.errorCount++;
-                results.errors.push(`Row ${i + 1}: Email ${entry.email} already exists.`);
-                continue;
-            }
-
             try {
                 // Generate employee ID
                 const generatedEmployeeId = `emp${Date.now()}_${i}`;
 
-                // Create employee record
-                const { data: newEmployee, error: employeeError } = await supabase
-                    .from('employees')
-                    .insert([{
-                        company_id: currentCompanyId,
-                        employee_id: generatedEmployeeId,
-                        email: entry.email,
-                        first_name: entry.firstName || '',
-                        middle_name: entry.middleName || null,
-                        last_name: entry.lastName || '',
-                        department: entry.department || '',
-                        address: entry.address || null,
-                        mobile_number: entry.mobileNumber || null,
-                        date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
-                        status: EmployeeStatus.ACTIVE,
-                        employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
-                    }])
-                    .select()
-                    .single();
+                // Atomically create employee + user account in one DB transaction
+                const { error: rpcError } = await supabase.rpc('create_employee_with_account', {
+                    p_caller_email: currentUserEmail,
+                    p_company_id: currentCompanyId,
+                    p_employee_id: generatedEmployeeId,
+                    p_email: entry.email,
+                    p_first_name: entry.firstName || '',
+                    p_last_name: entry.lastName || '',
+                    p_role: UserRole.EMPLOYEE,
+                    p_department: entry.department || '',
+                    p_password_hash: passwordHash,
+                    p_phone: entry.mobileNumber || null,
+                    p_date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
+                    p_employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
+                });
 
-                if (employeeError) throw employeeError;
-
-                // Create user account
-                const { error: accountError } = await supabase
-                    .from('user_accounts')
-                    .insert([{
-                        company_id: currentCompanyId,
-                        employee_id: newEmployee.id,
-                        email: entry.email,
-                        password_hash: passwordHash,
-                        role: UserRole.EMPLOYEE,
-                    }]);
-
-                if (accountError) throw accountError;
+                if (rpcError) throw rpcError;
 
                 results.successCount++;
             } catch (error: any) {
