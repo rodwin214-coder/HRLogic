@@ -1912,9 +1912,42 @@ export const deleteCustomHolidayType = async (typeName: string): Promise<void> =
     }
 };
 
-export const changePassword = (employeeId: string, currentPassword: string, newPassword: string): { success: boolean, message: string } => {
-    console.warn('changePassword: Not yet implemented in Supabase');
-    return { success: false, message: 'Password change not yet implemented' };
+export const changePassword = async (employeeId: string, currentPassword: string, newPassword: string): Promise<{ success: boolean, message: string }> => {
+    try {
+        await ensureUserContext();
+
+        const { data: account } = await supabase
+            .from('user_accounts')
+            .select('password_hash')
+            .eq('employee_id', employeeId)
+            .maybeSingle();
+
+        if (!account) {
+            return { success: false, message: 'Account not found.' };
+        }
+
+        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, account.password_hash);
+        if (!isCurrentPasswordValid) {
+            return { success: false, message: 'Current password is incorrect.' };
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        const { error } = await supabase
+            .from('user_accounts')
+            .update({ password_hash: hashedPassword })
+            .eq('employee_id', employeeId);
+
+        if (error) {
+            console.error('Error updating password:', error);
+            return { success: false, message: 'Failed to update password.' };
+        }
+
+        return { success: true, message: 'Password updated successfully.' };
+    } catch (error) {
+        console.error('Error changing password:', error);
+        return { success: false, message: 'Failed to change password.' };
+    }
 };
 
 export const getCustomFieldDefinitions = async (): Promise<CustomFieldDefinition[]> => {

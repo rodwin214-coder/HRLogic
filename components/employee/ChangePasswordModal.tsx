@@ -40,14 +40,14 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) =>
         e.preventDefault();
         setApiMessage(null);
         if (!user || !validate()) return;
-        
-        const result = api.changePassword(user.id, currentPassword, newPassword);
+
+        const result = await api.changePassword(user.id, currentPassword, newPassword);
 
         if (result.success) {
             setApiMessage({ type: 'success', text: result.message });
             setTimeout(() => {
                 onClose();
-            }, 2000); // Close modal after 2 seconds on success
+            }, 2000);
         } else {
             setApiMessage({ type: 'error', text: result.message });
         }
