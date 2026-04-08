@@ -398,7 +398,7 @@ const EmployeeDashboard: React.FC = () => {
         return <CompleteProfileModal onSuccess={refreshUser} />;
     }
 
-    const isLeaveAllowed = user.employmentType === EmploymentType.FULL_TIME;
+    const isLeaveAllowed = user.employmentType === EmploymentType.FULL_TIME || user.employmentType === EmploymentType.PROBATIONARY;
 
     return (
         <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -464,7 +464,7 @@ const EmployeeDashboard: React.FC = () => {
                             <button 
                                 onClick={() => isLeaveAllowed && openModal(RequestType.LEAVE)} 
                                 disabled={!isLeaveAllowed}
-                                title={!isLeaveAllowed ? "Only full-time employees are eligible for leave." : ""}
+                                title={!isLeaveAllowed ? "Only full-time and probationary employees are eligible for leave." : ""}
                                 className="w-full text-center bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed"
                             >
                                 File Leave
