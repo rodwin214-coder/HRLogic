@@ -5,10 +5,10 @@
       "args": [
         "-y",
         "@supabase/mcp-server-supabase@latest",
-        "--supabase-url",
-        "https://hdxflopzzfxfnldlnfsr.supabase.co",
-        "--supabase-key",
-        "sb_publishable_2RrNEfXxVCuwxnUT1sH4Eg_p_qr1EuQ"
+        "--access-token",
+        "sb_publishable_2RrNEfXxVCuwxnUT1sH4Eg_p_qr1EuQ",
+        "--project-ref",
+        "hdxflopzzfxfnldlnfsr"
       ]
     }
   }
