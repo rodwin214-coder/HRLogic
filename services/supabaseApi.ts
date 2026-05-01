@@ -537,54 +537,42 @@ export const inviteEmployee = async (employeeData: {
         const defaultPassword = 'qwerty123';
         const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-        // Check for duplicate email in this company
-        const { data: existingAccount } = await supabase
-            .from('user_accounts')
-            .select('id')
-            .eq('email', employeeData.email)
-            .eq('company_id', currentCompanyId)
-            .maybeSingle();
-
-        if (existingAccount) {
-            return { error: 'An employee with this email already exists in your company.' };
-        }
-
-        // Insert employee record
-        const { data: newEmployee, error: empError } = await supabase
-            .from('employees')
-            .insert([{
-                company_id: currentCompanyId,
-                employee_id: generatedEmployeeId,
+        // Create employee via edge function (service role bypasses RLS)
+        const createApiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-invitation-email`;
+        const createResponse = await fetch(createApiUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'create-employee',
+                callerEmail: currentUserEmail,
+                companyId: currentCompanyId,
+                employeeId: generatedEmployeeId,
                 email: employeeData.email,
-                first_name: employeeData.firstName,
-                last_name: employeeData.lastName,
+                firstName: employeeData.firstName,
+                lastName: employeeData.lastName,
                 department: employeeData.department,
-                shift_id: employeeData.shiftId || null,
-                date_hired: new Date().toISOString().split('T')[0],
-                employment_type: EmploymentType.PROBATIONARY,
-                status: 'Active',
-            }])
-            .select()
-            .single();
-
-        if (empError) {
-            throw empError;
-        }
-
-        // Insert user account
-        const { error: accountError } = await supabase
-            .from('user_accounts')
-            .insert([{
-                company_id: currentCompanyId,
-                employee_id: newEmployee.id,
-                email: employeeData.email,
-                password_hash: passwordHash,
+                shiftId: employeeData.shiftId || null,
+                dateHired: new Date().toISOString().split('T')[0],
+                employmentType: EmploymentType.PROBATIONARY,
+                passwordHash,
                 role: UserRole.EMPLOYEE,
-            }]);
+            }),
+        });
 
-        if (accountError) {
-            throw accountError;
+        const createResult = await createResponse.json();
+
+        if (!createResponse.ok) {
+            const errMsg = createResult.error || 'Failed to add employee';
+            if (errMsg.includes('DUPLICATE_EMAIL')) {
+                return { error: 'An employee with this email already exists in your company.' };
+            }
+            throw new Error(errMsg);
         }
+
+        const newEmployee = createResult.data;
 
         // Send invitation email
         try {
@@ -878,49 +866,34 @@ export const bulkImportEmployees = async (csvData: string): Promise<{ successCou
                 // Generate employee ID
                 const generatedEmployeeId = `emp${Date.now()}_${i}`;
 
-                // Check for duplicate email
-                const { data: existingAcct } = await supabase
-                    .from('user_accounts')
-                    .select('id')
-                    .eq('email', entry.email)
-                    .eq('company_id', currentCompanyId)
-                    .maybeSingle();
-
-                if (existingAcct) {
-                    throw new Error('DUPLICATE_EMAIL: An employee with this email already exists in your company.');
-                }
-
-                // Insert employee record
-                const { data: newEmp, error: bulkEmpError } = await supabase
-                    .from('employees')
-                    .insert([{
-                        company_id: currentCompanyId,
-                        employee_id: generatedEmployeeId,
+                // Create employee via edge function (service role bypasses RLS)
+                const bulkApiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-invitation-email`;
+                const bulkResponse = await fetch(bulkApiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'create-employee',
+                        callerEmail: currentUserEmail,
+                        companyId: currentCompanyId,
+                        employeeId: generatedEmployeeId,
                         email: entry.email,
-                        first_name: entry.firstName || '',
-                        last_name: entry.lastName || '',
+                        firstName: entry.firstName || '',
+                        lastName: entry.lastName || '',
                         department: entry.department || '',
-                        date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
-                        employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
-                        status: 'Active',
-                    }])
-                    .select()
-                    .single();
-
-                if (bulkEmpError) throw bulkEmpError;
-
-                // Insert user account
-                const { error: bulkAcctError } = await supabase
-                    .from('user_accounts')
-                    .insert([{
-                        company_id: currentCompanyId,
-                        employee_id: newEmp.id,
-                        email: entry.email,
-                        password_hash: passwordHash,
+                        dateHired: entry.dateHired || new Date().toISOString().split('T')[0],
+                        employmentType: entry.employmentType || EmploymentType.PROBATIONARY,
+                        passwordHash,
                         role: UserRole.EMPLOYEE,
-                    }]);
+                    }),
+                });
 
-                if (bulkAcctError) throw bulkAcctError;
+                const bulkResult = await bulkResponse.json();
+                if (!bulkResponse.ok) {
+                    throw new Error(bulkResult.error || 'Failed to add employee');
+                }
 
                 results.successCount++;
             } catch (error: any) {

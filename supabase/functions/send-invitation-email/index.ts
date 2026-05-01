@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,53 +7,153 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-interface InvitationEmailRequest {
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  try {
+    const body = await req.json();
+
+    // Route: create employee (uses service role to bypass RLS)
+    if (body.action === "create-employee") {
+      return await handleCreateEmployee(body);
+    }
+
+    // Route: send invitation email
+    return await handleSendEmail(body);
+  } catch (error) {
+    console.error("Error:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+
+async function handleCreateEmployee(body: {
+  callerEmail: string;
+  companyId: string;
+  employeeId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  department: string;
+  shiftId?: string | null;
+  dateHired: string;
+  employmentType: string;
+  passwordHash: string;
+  role: string;
+}) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  // Verify caller is an employer for this company
+  const { data: caller } = await supabase
+    .from("user_accounts")
+    .select("role, company_id")
+    .eq("email", body.callerEmail)
+    .maybeSingle();
+
+  if (!caller || caller.role !== "employer" || caller.company_id !== body.companyId) {
+    return new Response(
+      JSON.stringify({ error: "Permission denied" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Check for duplicate email
+  const { data: existing } = await supabase
+    .from("user_accounts")
+    .select("id")
+    .eq("email", body.email)
+    .eq("company_id", body.companyId)
+    .maybeSingle();
+
+  if (existing) {
+    return new Response(
+      JSON.stringify({ error: "DUPLICATE_EMAIL: An employee with this email already exists in your company." }),
+      { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  // Insert employee (service role bypasses RLS)
+  const { data: newEmployee, error: empError } = await supabase
+    .from("employees")
+    .insert([{
+      company_id: body.companyId,
+      employee_id: body.employeeId,
+      email: body.email,
+      first_name: body.firstName,
+      last_name: body.lastName,
+      department: body.department,
+      shift_id: body.shiftId || null,
+      date_hired: body.dateHired,
+      employment_type: body.employmentType,
+      status: "Active",
+    }])
+    .select()
+    .single();
+
+  if (empError) {
+    console.error("Employee insert error:", empError);
+    throw new Error(empError.message);
+  }
+
+  // Insert user account
+  const { error: accountError } = await supabase
+    .from("user_accounts")
+    .insert([{
+      company_id: body.companyId,
+      employee_id: newEmployee.id,
+      email: body.email,
+      password_hash: body.passwordHash,
+      role: body.role || "employee",
+    }]);
+
+  if (accountError) {
+    console.error("User account insert error:", accountError);
+    throw new Error(accountError.message);
+  }
+
+  return new Response(
+    JSON.stringify({ data: newEmployee }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
+async function handleSendEmail(body: {
   employeeEmail: string;
   employeeName: string;
   companyName: string;
   companyCode: string;
-}
+}) {
+  const { employeeEmail, employeeName, companyName, companyCode } = body;
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+
+  if (!resendApiKey) {
+    console.warn("RESEND_API_KEY not configured. Email will be logged but not sent.");
+    console.log("=== INVITATION EMAIL (NOT SENT) ===");
+    console.log("To:", employeeEmail);
+    console.log("Subject:", `Welcome to ${companyName} - Your Account Has Been Created`);
+    console.log("Company:", companyName);
+    console.log("Company Code:", companyCode);
+    console.log("===================================");
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Email service not configured. Please set up Resend API key.",
+        logged: true,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
-  try {
-    const { employeeEmail, employeeName, companyName, companyCode }: InvitationEmailRequest = await req.json();
-
-    // Get Resend API key from environment
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-
-    if (!resendApiKey) {
-      console.warn('RESEND_API_KEY not configured. Email will be logged but not sent.');
-      console.log('=== INVITATION EMAIL (NOT SENT) ===');
-      console.log('To:', employeeEmail);
-      console.log('Subject:', `Welcome to ${companyName} - Your Account Has Been Created`);
-      console.log('Company:', companyName);
-      console.log('Company Code:', companyCode);
-      console.log('===================================');
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Email service not configured. Please set up Resend API key.',
-          logged: true,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    }
-
-    const emailSubject = `Welcome to ${companyName} - Your Account Has Been Created`;
-    const emailBody = `
+  const emailSubject = `Welcome to ${companyName} - Your Account Has Been Created`;
+  const emailBody = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -99,7 +200,7 @@ Deno.serve(async (req: Request) => {
       </div>
 
       <div class="warning">
-        <strong>⚠️ Important:</strong> Please change your password immediately after your first login for security purposes.
+        <strong>Important:</strong> Please change your password immediately after your first login for security purposes.
       </div>
 
       <p><strong>What to do next:</strong></p>
@@ -119,59 +220,36 @@ Deno.serve(async (req: Request) => {
   </div>
 </body>
 </html>
-    `.trim();
+  `.trim();
 
-    // Send email using Resend
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'WorkLogix <onboarding@resend.dev>',
-        to: [employeeEmail],
-        subject: emailSubject,
-        html: emailBody,
-      }),
-    });
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "WorkLogix <onboarding@resend.dev>",
+      to: [employeeEmail],
+      subject: emailSubject,
+      html: emailBody,
+    }),
+  });
 
-    if (!resendResponse.ok) {
-      const errorData = await resendResponse.json();
-      throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
-    }
-
-    const resendData = await resendResponse.json();
-
-    console.log('Email sent successfully via Resend:', resendData);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Invitation email sent successfully',
-        emailId: resendData.id,
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-  } catch (error) {
-    console.error('Error sending invitation email:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+  if (!resendResponse.ok) {
+    const errorData = await resendResponse.json();
+    throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
   }
-});
+
+  const resendData = await resendResponse.json();
+  console.log("Email sent successfully via Resend:", resendData);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      message: "Invitation email sent successfully",
+      emailId: resendData.id,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
