@@ -1080,8 +1080,8 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
             }
 
             const { data: employers } = await supabase
-                .from('employees')
-                .select('id')
+                .from('user_accounts')
+                .select('employee_id')
                 .eq('company_id', currentCompanyId)
                 .eq('role', 'employer');
 
@@ -1090,13 +1090,13 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
                     const { data: settings } = await supabase
                         .from('notification_settings')
                         .select('notify_on_request')
-                        .eq('user_id', employer.id)
+                        .eq('user_id', employer.employee_id)
                         .maybeSingle();
 
                     if (!settings || settings.notify_on_request !== false) {
                         await createNotification(
                             currentCompanyId,
-                            employer.id,
+                            employer.employee_id,
                             'New Request Pending',
                             `${employeeName} submitted a ${requestTypeText} request${requestDetails ? ': ' + requestDetails : ''}`,
                             'request_pending',
@@ -1393,8 +1393,8 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
     const clockInTimeFormatted = new Date(record.clockInTime).toLocaleTimeString();
 
     const { data: employers } = await supabase
-        .from('employees')
-        .select('id')
+        .from('user_accounts')
+        .select('employee_id')
         .eq('company_id', companyId)
         .eq('role', 'employer');
 
@@ -1403,13 +1403,13 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
             const { data: settings } = await supabase
                 .from('notification_settings')
                 .select('notify_on_clock_in')
-                .eq('user_id', employer.id)
+                .eq('user_id', employer.employee_id)
                 .maybeSingle();
 
             if (!settings || settings.notify_on_clock_in !== false) {
                 await createNotification(
                     companyId,
-                    employer.id,
+                    employer.employee_id,
                     'Employee Clocked In',
                     `${employeeName} clocked in at ${clockInTimeFormatted}${status ? ` (${status})` : ''}`,
                     'clock_in',
@@ -1483,8 +1483,8 @@ export const clockOut = async (
             const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
 
             const { data: employers } = await supabase
-                .from('employees')
-                .select('id')
+                .from('user_accounts')
+                .select('employee_id')
                 .eq('company_id', employee.company_id)
                 .eq('role', 'employer');
 
@@ -1493,13 +1493,13 @@ export const clockOut = async (
                     const { data: settings } = await supabase
                         .from('notification_settings')
                         .select('notify_on_clock_out')
-                        .eq('user_id', employer.id)
+                        .eq('user_id', employer.employee_id)
                         .maybeSingle();
 
                     if (!settings || settings.notify_on_clock_out !== false) {
                         await createNotification(
                             employee.company_id,
-                            employer.id,
+                            employer.employee_id,
                             'Employee Clocked Out',
                             `${employeeName} clocked out at ${clockOutTimeFormatted} (${totalHours} hours)`,
                             'clock_out',
