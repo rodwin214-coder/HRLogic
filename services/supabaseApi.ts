@@ -537,27 +537,53 @@ export const inviteEmployee = async (employeeData: {
         const defaultPassword = 'qwerty123';
         const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
-        // Atomically create employee + user account in one DB transaction
-        const { data: newEmployee, error: rpcError } = await supabase.rpc('create_employee_with_account', {
-            p_caller_email: currentUserEmail,
-            p_company_id: currentCompanyId,
-            p_employee_id: generatedEmployeeId,
-            p_email: employeeData.email,
-            p_first_name: employeeData.firstName,
-            p_last_name: employeeData.lastName,
-            p_role: UserRole.EMPLOYEE,
-            p_department: employeeData.department,
-            p_password_hash: passwordHash,
-            p_shift_id: employeeData.shiftId || null,
-            p_date_hired: new Date().toISOString().split('T')[0],
-            p_employment_type: EmploymentType.PROBATIONARY,
-        });
+        // Check for duplicate email in this company
+        const { data: existingAccount } = await supabase
+            .from('user_accounts')
+            .select('id')
+            .eq('email', employeeData.email)
+            .eq('company_id', currentCompanyId)
+            .maybeSingle();
 
-        if (rpcError) {
-            if (rpcError.message?.includes('DUPLICATE_EMAIL')) {
-                return { error: 'An employee with this email already exists in your company.' };
-            }
-            throw rpcError;
+        if (existingAccount) {
+            return { error: 'An employee with this email already exists in your company.' };
+        }
+
+        // Insert employee record
+        const { data: newEmployee, error: empError } = await supabase
+            .from('employees')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: generatedEmployeeId,
+                email: employeeData.email,
+                first_name: employeeData.firstName,
+                last_name: employeeData.lastName,
+                department: employeeData.department,
+                shift_id: employeeData.shiftId || null,
+                date_hired: new Date().toISOString().split('T')[0],
+                employment_type: EmploymentType.PROBATIONARY,
+                status: 'Active',
+            }])
+            .select()
+            .single();
+
+        if (empError) {
+            throw empError;
+        }
+
+        // Insert user account
+        const { error: accountError } = await supabase
+            .from('user_accounts')
+            .insert([{
+                company_id: currentCompanyId,
+                employee_id: newEmployee.id,
+                email: employeeData.email,
+                password_hash: passwordHash,
+                role: UserRole.EMPLOYEE,
+            }]);
+
+        if (accountError) {
+            throw accountError;
         }
 
         // Send invitation email
@@ -852,23 +878,49 @@ export const bulkImportEmployees = async (csvData: string): Promise<{ successCou
                 // Generate employee ID
                 const generatedEmployeeId = `emp${Date.now()}_${i}`;
 
-                // Atomically create employee + user account in one DB transaction
-                const { error: rpcError } = await supabase.rpc('create_employee_with_account', {
-                    p_caller_email: currentUserEmail,
-                    p_company_id: currentCompanyId,
-                    p_employee_id: generatedEmployeeId,
-                    p_email: entry.email,
-                    p_first_name: entry.firstName || '',
-                    p_last_name: entry.lastName || '',
-                    p_role: UserRole.EMPLOYEE,
-                    p_department: entry.department || '',
-                    p_password_hash: passwordHash,
-                    p_phone: entry.mobileNumber || null,
-                    p_date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
-                    p_employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
-                });
+                // Check for duplicate email
+                const { data: existingAcct } = await supabase
+                    .from('user_accounts')
+                    .select('id')
+                    .eq('email', entry.email)
+                    .eq('company_id', currentCompanyId)
+                    .maybeSingle();
 
-                if (rpcError) throw rpcError;
+                if (existingAcct) {
+                    throw new Error('DUPLICATE_EMAIL: An employee with this email already exists in your company.');
+                }
+
+                // Insert employee record
+                const { data: newEmp, error: bulkEmpError } = await supabase
+                    .from('employees')
+                    .insert([{
+                        company_id: currentCompanyId,
+                        employee_id: generatedEmployeeId,
+                        email: entry.email,
+                        first_name: entry.firstName || '',
+                        last_name: entry.lastName || '',
+                        department: entry.department || '',
+                        date_hired: entry.dateHired || new Date().toISOString().split('T')[0],
+                        employment_type: entry.employmentType || EmploymentType.PROBATIONARY,
+                        status: 'Active',
+                    }])
+                    .select()
+                    .single();
+
+                if (bulkEmpError) throw bulkEmpError;
+
+                // Insert user account
+                const { error: bulkAcctError } = await supabase
+                    .from('user_accounts')
+                    .insert([{
+                        company_id: currentCompanyId,
+                        employee_id: newEmp.id,
+                        email: entry.email,
+                        password_hash: passwordHash,
+                        role: UserRole.EMPLOYEE,
+                    }]);
+
+                if (bulkAcctError) throw bulkAcctError;
 
                 results.successCount++;
             } catch (error: any) {
