@@ -3318,12 +3318,13 @@ export const computeEmployeePayroll = async (params: {
     const hourlyRate = dailyRate / 8;
     const minuteRate = hourlyRate / 60;
 
-    // Basic pay = days actually worked × daily rate
+    // Basic pay = full period pay minus absent days
+    // (daysWorked already excludes absences, so basicPay naturally reflects only worked days)
     const basicPay = dailyRate * daysWorked;
 
-    // Attendance deductions
-    const absentDeduction   = absentDays * dailyRate;
-    const lateDeduction     = lateMinutes * minuteRate;
+    // Absent deduction is zero — basicPay already only covers days worked
+    const absentDeduction    = 0;
+    const lateDeduction      = lateMinutes * minuteRate;
     const undertimeDeduction = undertimeMinutes * minuteRate;
 
     // OT and special pay premiums (PH Labor Code)
