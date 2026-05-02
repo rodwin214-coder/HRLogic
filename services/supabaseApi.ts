@@ -2897,6 +2897,470 @@ export const updateNotificationSettings = async (
 // Export the WORKLOGIX_LOGO_BASE64 for compatibility
 export { WORKLOGIX_LOGO_BASE64 } from './mockApi';
 
+// ─── Payroll API ─────────────────────────────────────────────────────────────
+
+import {
+    PayrollPeriod, PayrollRecord, PayrollAdjustment, PayFrequency, PayrollStatus, AdjustmentType,
+} from '../types';
+
+function dbPeriodToPayrollPeriod(r: any): PayrollPeriod {
+    return {
+        id: r.id,
+        companyId: r.company_id,
+        periodName: r.period_name,
+        payFrequency: r.pay_frequency,
+        periodStart: r.period_start,
+        periodEnd: r.period_end,
+        payDate: r.pay_date,
+        status: r.status,
+        notes: r.notes ?? '',
+        createdAt: r.created_at,
+    };
+}
+
+function dbRecordToPayrollRecord(r: any): PayrollRecord {
+    return {
+        id: r.id,
+        companyId: r.company_id,
+        periodId: r.period_id,
+        employeeId: r.employee_id,
+        basicSalary: Number(r.basic_salary),
+        dailyRate: Number(r.daily_rate),
+        daysWorked: Number(r.days_worked),
+        hoursWorked: Number(r.hours_worked),
+        basicPay: Number(r.basic_pay),
+        overtimeHours: Number(r.overtime_hours),
+        overtimePay: Number(r.overtime_pay),
+        regularHolidayHours: Number(r.regular_holiday_hours),
+        regularHolidayPay: Number(r.regular_holiday_pay),
+        specialHolidayHours: Number(r.special_holiday_hours),
+        specialHolidayPay: Number(r.special_holiday_pay),
+        nightDiffHours: Number(r.night_diff_hours),
+        nightDiffPay: Number(r.night_diff_pay),
+        restDayHours: Number(r.rest_day_hours),
+        restDayPay: Number(r.rest_day_pay),
+        allowance: Number(r.allowance),
+        deMinimis: Number(r.de_minimis),
+        thirteenthMonthAccrued: Number(r.thirteenth_month_accrued),
+        grossPay: Number(r.gross_pay),
+        sssContribution: Number(r.sss_contribution),
+        philhealthContribution: Number(r.philhealth_contribution),
+        pagibigContribution: Number(r.pagibig_contribution),
+        totalContributions: Number(r.total_contributions),
+        taxableIncome: Number(r.taxable_income),
+        withholdingTax: Number(r.withholding_tax),
+        sssLoan: Number(r.sss_loan),
+        pagibigLoan: Number(r.pagibig_loan),
+        cashAdvance: Number(r.cash_advance),
+        otherDeductions: Number(r.other_deductions),
+        totalDeductions: Number(r.total_deductions),
+        netPay: Number(r.net_pay),
+        status: r.status,
+        notes: r.notes ?? '',
+    };
+}
+
+// PH SSS contribution lookup
+export const computeSSSContribution = async (monthlyBasic: number): Promise<number> => {
+    const { data } = await supabaseAdmin
+        .from('ph_sss_brackets')
+        .select('employee_contribution')
+        .lte('range_from', monthlyBasic)
+        .order('range_from', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    return data ? Number(data.employee_contribution) : 0;
+};
+
+// PH PhilHealth contribution
+export const computePhilHealthContribution = async (monthlyBasic: number): Promise<number> => {
+    const { data } = await supabaseAdmin
+        .from('ph_philhealth_config')
+        .select('*')
+        .order('effective_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (!data) return 0;
+    const income = Math.min(Math.max(monthlyBasic, data.income_floor), data.income_ceiling);
+    const total = income * data.premium_rate;
+    const employee = total / 2;
+    return Math.min(Math.max(employee, data.min_premium / 2), data.max_premium / 2);
+};
+
+// PH Pag-IBIG contribution
+export const computePagIBIGContribution = async (monthlyBasic: number): Promise<number> => {
+    const { data } = await supabaseAdmin
+        .from('ph_pagibig_config')
+        .select('*')
+        .order('effective_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (!data) return 0;
+    const rate = monthlyBasic <= data.low_income_ceiling
+        ? data.low_income_employee_rate
+        : data.high_income_employee_rate;
+    return Math.min(monthlyBasic * rate, data.max_employee_contribution);
+};
+
+// PH Withholding Tax (annualized method)
+export const computeWithholdingTax = async (annualTaxableIncome: number): Promise<number> => {
+    const { data } = await supabaseAdmin
+        .from('ph_tax_table')
+        .select('*')
+        .lte('bracket_from', annualTaxableIncome)
+        .order('bracket_from', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (!data) return 0;
+    const excess = annualTaxableIncome - data.excess_over;
+    return Number(data.base_tax) + excess * Number(data.rate);
+};
+
+// Compute full payroll record for one employee for a period
+export const computeEmployeePayroll = async (params: {
+    employeeId: string;
+    companyId: string;
+    periodId: string;
+    basicSalary: number;
+    daysWorked: number;
+    overtimeHours?: number;
+    regularHolidayHours?: number;
+    specialHolidayHours?: number;
+    nightDiffHours?: number;
+    restDayHours?: number;
+    allowance?: number;
+    deMinimis?: number;
+    payFrequency: PayFrequency;
+}): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
+    const {
+        employeeId, companyId, periodId, basicSalary, daysWorked,
+        overtimeHours = 0, regularHolidayHours = 0, specialHolidayHours = 0,
+        nightDiffHours = 0, restDayHours = 0, allowance = 0, deMinimis = 0,
+        payFrequency,
+    } = params;
+
+    // Working days per period based on frequency
+    const periodsPerYear: Record<PayFrequency, number> = {
+        weekly: 52, 'bi-weekly': 26, 'semi-monthly': 24, monthly: 12,
+    };
+    const totalPeriodsYear = periodsPerYear[payFrequency];
+    const monthlyEquivalent = payFrequency === 'monthly' ? basicSalary
+        : payFrequency === 'semi-monthly' ? basicSalary
+        : basicSalary; // already monthly
+
+    // Daily rate (monthly / 22 working days standard)
+    const dailyRate = monthlyEquivalent / 22;
+    const hourlyRate = dailyRate / 8;
+
+    const basicPay = dailyRate * daysWorked;
+
+    // OT = 125% of hourly rate
+    const overtimePay = overtimeHours * hourlyRate * 1.25;
+    // Regular holiday = 200% of hourly rate
+    const regularHolidayPay = regularHolidayHours * hourlyRate * 2.0;
+    // Special holiday = 130% of hourly rate
+    const specialHolidayPay = specialHolidayHours * hourlyRate * 1.3;
+    // Night diff = 110% of hourly rate
+    const nightDiffPay = nightDiffHours * hourlyRate * 0.10; // 10% premium
+    // Rest day = 130% of hourly rate
+    const restDayPay = restDayHours * hourlyRate * 1.3;
+
+    // 13th month accrual (basic / 12)
+    const thirteenthMonthAccrued = monthlyEquivalent / 12;
+
+    const grossPay = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
+        + nightDiffPay + restDayPay + allowance + deMinimis;
+
+    // Contributions based on monthly equivalent
+    const sssContribution = await computeSSSContribution(monthlyEquivalent);
+    const philhealthContribution = await computePhilHealthContribution(monthlyEquivalent);
+    const pagibigContribution = await computePagIBIGContribution(monthlyEquivalent);
+    const totalContributions = sssContribution + philhealthContribution + pagibigContribution;
+
+    // Taxable income per period = gross - contributions - de minimis exemption
+    // De minimis exempt up to PHP 90,000/year aggregate
+    const periodGrossForTax = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
+        + nightDiffPay + restDayPay + allowance;
+    const taxablePerPeriod = Math.max(0, periodGrossForTax - totalContributions);
+    const annualTaxable = taxablePerPeriod * totalPeriodsYear;
+    const annualTax = await computeWithholdingTax(annualTaxable);
+    const withholdingTax = Math.max(0, annualTax / totalPeriodsYear);
+
+    const totalDeductions = totalContributions + withholdingTax;
+    const netPay = grossPay - totalDeductions;
+
+    return {
+        companyId,
+        periodId,
+        employeeId,
+        basicSalary,
+        dailyRate,
+        daysWorked,
+        hoursWorked: daysWorked * 8,
+        basicPay,
+        overtimeHours,
+        overtimePay,
+        regularHolidayHours,
+        regularHolidayPay,
+        specialHolidayHours,
+        specialHolidayPay,
+        nightDiffHours,
+        nightDiffPay,
+        restDayHours,
+        restDayPay,
+        allowance,
+        deMinimis,
+        thirteenthMonthAccrued,
+        grossPay,
+        sssContribution,
+        philhealthContribution,
+        pagibigContribution,
+        totalContributions,
+        taxableIncome: taxablePerPeriod,
+        withholdingTax,
+        sssLoan: 0,
+        pagibigLoan: 0,
+        cashAdvance: 0,
+        otherDeductions: 0,
+        totalDeductions,
+        netPay,
+        status: 'Draft',
+        notes: '',
+    };
+};
+
+export const getPayrollPeriods = async (): Promise<PayrollPeriod[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabaseAdmin
+            .from('payroll_periods')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .order('period_start', { ascending: false });
+        if (error) throw error;
+        return (data ?? []).map(dbPeriodToPayrollPeriod);
+    } catch (err) {
+        console.error('getPayrollPeriods error:', err);
+        return [];
+    }
+};
+
+export const createPayrollPeriod = async (period: {
+    periodName: string;
+    payFrequency: PayFrequency;
+    periodStart: string;
+    periodEnd: string;
+    payDate: string;
+    notes?: string;
+}): Promise<PayrollPeriod | null> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabaseAdmin
+            .from('payroll_periods')
+            .insert([{
+                company_id: currentCompanyId,
+                period_name: period.periodName,
+                pay_frequency: period.payFrequency,
+                period_start: period.periodStart,
+                period_end: period.periodEnd,
+                pay_date: period.payDate,
+                notes: period.notes ?? '',
+                status: 'Draft',
+            }])
+            .select()
+            .single();
+        if (error) throw error;
+        return dbPeriodToPayrollPeriod(data);
+    } catch (err) {
+        console.error('createPayrollPeriod error:', err);
+        return null;
+    }
+};
+
+export const updatePayrollPeriodStatus = async (periodId: string, status: PayrollStatus): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabaseAdmin
+            .from('payroll_periods')
+            .update({ status, updated_at: new Date().toISOString() })
+            .eq('id', periodId)
+            .eq('company_id', currentCompanyId);
+        if (error) throw error;
+        if (status === 'Paid') {
+            await supabaseAdmin
+                .from('payroll_records')
+                .update({ status: 'Paid', updated_at: new Date().toISOString() })
+                .eq('period_id', periodId);
+        }
+    } catch (err) {
+        console.error('updatePayrollPeriodStatus error:', err);
+    }
+};
+
+export const deletePayrollPeriod = async (periodId: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        await supabaseAdmin.from('payroll_adjustments').delete().eq('period_id', periodId);
+        await supabaseAdmin.from('payroll_records').delete().eq('period_id', periodId);
+        const { error } = await supabaseAdmin
+            .from('payroll_periods')
+            .delete()
+            .eq('id', periodId)
+            .eq('company_id', currentCompanyId);
+        if (error) throw error;
+    } catch (err) {
+        console.error('deletePayrollPeriod error:', err);
+    }
+};
+
+export const getPayrollRecords = async (periodId: string): Promise<PayrollRecord[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabaseAdmin
+            .from('payroll_records')
+            .select('*')
+            .eq('period_id', periodId)
+            .eq('company_id', currentCompanyId);
+        if (error) throw error;
+        return (data ?? []).map(dbRecordToPayrollRecord);
+    } catch (err) {
+        console.error('getPayrollRecords error:', err);
+        return [];
+    }
+};
+
+export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Promise<PayrollRecord | null> => {
+    try {
+        await ensureUserContext();
+        const row = {
+            company_id: record.companyId,
+            period_id: record.periodId,
+            employee_id: record.employeeId,
+            basic_salary: record.basicSalary,
+            daily_rate: record.dailyRate,
+            days_worked: record.daysWorked,
+            hours_worked: record.hoursWorked,
+            basic_pay: record.basicPay,
+            overtime_hours: record.overtimeHours,
+            overtime_pay: record.overtimePay,
+            regular_holiday_hours: record.regularHolidayHours,
+            regular_holiday_pay: record.regularHolidayPay,
+            special_holiday_hours: record.specialHolidayHours,
+            special_holiday_pay: record.specialHolidayPay,
+            night_diff_hours: record.nightDiffHours,
+            night_diff_pay: record.nightDiffPay,
+            rest_day_hours: record.restDayHours,
+            rest_day_pay: record.restDayPay,
+            allowance: record.allowance,
+            de_minimis: record.deMinimis,
+            thirteenth_month_accrued: record.thirteenthMonthAccrued,
+            gross_pay: record.grossPay,
+            sss_contribution: record.sssContribution,
+            philhealth_contribution: record.philhealthContribution,
+            pagibig_contribution: record.pagibigContribution,
+            total_contributions: record.totalContributions,
+            taxable_income: record.taxableIncome,
+            withholding_tax: record.withholdingTax,
+            sss_loan: record.sssLoan,
+            pagibig_loan: record.pagibigLoan,
+            cash_advance: record.cashAdvance,
+            other_deductions: record.otherDeductions,
+            total_deductions: record.totalDeductions,
+            net_pay: record.netPay,
+            status: record.status,
+            notes: record.notes,
+            updated_at: new Date().toISOString(),
+        };
+        const { data, error } = await supabaseAdmin
+            .from('payroll_records')
+            .upsert([row], { onConflict: 'period_id,employee_id' })
+            .select()
+            .single();
+        if (error) throw error;
+        return dbRecordToPayrollRecord(data);
+    } catch (err) {
+        console.error('upsertPayrollRecord error:', err);
+        return null;
+    }
+};
+
+export const generatePayrollForPeriod = async (
+    period: PayrollPeriod,
+    employees: import('../types').Employee[]
+): Promise<PayrollRecord[]> => {
+    const results: PayrollRecord[] = [];
+    for (const emp of employees) {
+        if (emp.status !== 'Active') continue;
+        const latestSalary = emp.salaryHistory?.[0];
+        if (!latestSalary) continue;
+        const computed = await computeEmployeePayroll({
+            employeeId: emp.id,
+            companyId: emp.companyId,
+            periodId: period.id,
+            basicSalary: latestSalary.basicSalary,
+            daysWorked: period.payFrequency === 'semi-monthly' ? 11
+                : period.payFrequency === 'monthly' ? 22
+                : period.payFrequency === 'bi-weekly' ? 10
+                : 5,
+            allowance: latestSalary.allowance,
+            payFrequency: period.payFrequency,
+        });
+        const saved = await upsertPayrollRecord(computed);
+        if (saved) results.push(saved);
+    }
+    return results;
+};
+
+export const getPayrollAdjustments = async (periodId: string): Promise<PayrollAdjustment[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabaseAdmin
+            .from('payroll_adjustments')
+            .select('*')
+            .eq('period_id', periodId)
+            .eq('company_id', currentCompanyId);
+        if (error) throw error;
+        return (data ?? []).map((r: any) => ({
+            id: r.id,
+            companyId: r.company_id,
+            periodId: r.period_id,
+            employeeId: r.employee_id,
+            adjustmentType: r.adjustment_type,
+            amount: Number(r.amount),
+            description: r.description ?? '',
+            createdAt: r.created_at,
+        }));
+    } catch (err) {
+        console.error('getPayrollAdjustments error:', err);
+        return [];
+    }
+};
+
+export const addPayrollAdjustment = async (adj: {
+    periodId: string;
+    employeeId: string;
+    adjustmentType: AdjustmentType;
+    amount: number;
+    description: string;
+}): Promise<void> => {
+    try {
+        await ensureUserContext();
+        const { error } = await supabaseAdmin
+            .from('payroll_adjustments')
+            .insert([{
+                company_id: currentCompanyId,
+                period_id: adj.periodId,
+                employee_id: adj.employeeId,
+                adjustment_type: adj.adjustmentType,
+                amount: adj.amount,
+                description: adj.description,
+            }]);
+        if (error) throw error;
+    } catch (err) {
+        console.error('addPayrollAdjustment error:', err);
+    }
+};
+
 // Note: This is a starter implementation. You'll need to implement additional functions
 // based on your application's needs. The key functions for authentication and basic
 // employee management are provided above.

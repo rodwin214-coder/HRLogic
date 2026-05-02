@@ -13,8 +13,9 @@ import * as api from '../../services/supabaseApi';
 import { CompanyProfile as CompanyProfileType, RequestStatus } from '../../types';
 import CustomFieldsSetup from './CustomFieldsSetup';
 import NotificationBell from '../common/NotificationBell';
+import PayrollModule from './PayrollModule';
 
-type Tab = 'notifications' | 'employees' | 'reports' | 'company' | 'shifts' | 'leavePolicy' | 'calendar' | 'customFields';
+type Tab = 'notifications' | 'employees' | 'reports' | 'company' | 'shifts' | 'leavePolicy' | 'calendar' | 'customFields' | 'payroll';
 
 const EmployerDashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('notifications');
@@ -96,6 +97,7 @@ const EmployerDashboard: React.FC = () => {
                     <TabButton tabId="calendar">Holidays</TabButton>
                     <TabButton tabId="shifts">Shifts</TabButton>
                     <TabButton tabId="leavePolicy">Leave Policy</TabButton>
+                    <TabButton tabId="payroll">Payroll</TabButton>
                     <TabButton tabId="customFields">Custom Fields</TabButton>
                     <TabButton tabId="company">Company Profile</TabButton>
                 </nav>
@@ -110,6 +112,7 @@ const EmployerDashboard: React.FC = () => {
                 <div className={activeTab === 'leavePolicy' ? '' : 'hidden'}><LeaveSetup /></div>
                 <div className={activeTab === 'customFields' ? '' : 'hidden'}><CustomFieldsSetup /></div>
                 <div className={activeTab === 'calendar' ? '' : 'hidden'}><HolidayCalendar canAddHoliday={true} /></div>
+                <div className={activeTab === 'payroll' ? '' : 'hidden'}><PayrollModule /></div>
             </main>
         </div>
     );

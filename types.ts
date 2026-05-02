@@ -249,3 +249,92 @@ export interface EmployeeFile {
     uploadedBy: string;
     uploadedAt: string;
 }
+
+// ─── Payroll ────────────────────────────────────────────────────────────────
+
+export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly';
+export type PayrollStatus = 'Draft' | 'Finalized' | 'Paid';
+export type AdjustmentType = 'bonus' | 'commission' | 'allowance' | 'sss_loan' | 'pagibig_loan' | 'cash_advance' | 'other_deduction' | 'other_addition';
+
+export interface PayrollPeriod {
+    id: string;
+    companyId: string;
+    periodName: string;
+    payFrequency: PayFrequency;
+    periodStart: string;
+    periodEnd: string;
+    payDate: string;
+    status: PayrollStatus;
+    notes: string;
+    createdAt: string;
+}
+
+export interface PayrollRecord {
+    id: string;
+    companyId: string;
+    periodId: string;
+    employeeId: string;
+    // Earnings
+    basicSalary: number;
+    dailyRate: number;
+    daysWorked: number;
+    hoursWorked: number;
+    basicPay: number;
+    // Overtime & Special
+    overtimeHours: number;
+    overtimePay: number;
+    regularHolidayHours: number;
+    regularHolidayPay: number;
+    specialHolidayHours: number;
+    specialHolidayPay: number;
+    nightDiffHours: number;
+    nightDiffPay: number;
+    restDayHours: number;
+    restDayPay: number;
+    // Allowances
+    allowance: number;
+    deMinimis: number;
+    thirteenthMonthAccrued: number;
+    grossPay: number;
+    // Contributions
+    sssContribution: number;
+    philhealthContribution: number;
+    pagibigContribution: number;
+    totalContributions: number;
+    // Tax
+    taxableIncome: number;
+    withholdingTax: number;
+    // Other deductions
+    sssLoan: number;
+    pagibigLoan: number;
+    cashAdvance: number;
+    otherDeductions: number;
+    totalDeductions: number;
+    netPay: number;
+    status: PayrollStatus;
+    notes: string;
+}
+
+export interface PayrollAdjustment {
+    id: string;
+    companyId: string;
+    periodId: string;
+    employeeId: string;
+    adjustmentType: AdjustmentType;
+    amount: number;
+    description: string;
+    createdAt: string;
+}
+
+export interface PayrollSummary {
+    period: PayrollPeriod;
+    records: PayrollRecord[];
+    totalGross: number;
+    totalDeductions: number;
+    totalNetPay: number;
+    totalSSS: number;
+    totalPhilHealth: number;
+    totalPagIBIG: number;
+    totalTax: number;
+    employeeCount: number;
+}
