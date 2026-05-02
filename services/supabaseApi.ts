@@ -3100,11 +3100,20 @@ export const analyzeAttendanceForPayroll = async (params: {
         };
     }
 
-    // Build a set of dates covered by approved leave — no absent deduction on these days
+    // Build sets of dates covered by approved leave
+    // Paid leave → no absent deduction; Unpaid leave → deduction still applies
     const approvedLeaveDates = new Set<string>();
+    const unpaidLeaveDates   = new Set<string>();
     for (const r of (rawLeaveRequests ?? [])) {
+        const isUnpaid = (r.leave_type as string)?.toLowerCase().includes('unpaid');
         for (const d of dateRange(r.start_date, r.end_date)) {
-            if (d >= periodStart && d <= periodEnd) approvedLeaveDates.add(d);
+            if (d >= periodStart && d <= periodEnd) {
+                if (isUnpaid) {
+                    unpaidLeaveDates.add(d);
+                } else {
+                    approvedLeaveDates.add(d);
+                }
+            }
         }
     }
 
@@ -3158,14 +3167,16 @@ export const analyzeAttendanceForPayroll = async (params: {
         const isRestDay    = !isWorkDay;
         const holidayType  = holidayMap[date];
         const attended     = byDate[date];
-        const isOnLeave    = approvedLeaveDates.has(date);
+        const isOnLeave      = approvedLeaveDates.has(date);
+        const isOnUnpaidLeave = unpaidLeaveDates.has(date);
 
         // Count scheduled work days (regular working days only, excl. weekends/off-schedule)
         if (isWorkDay) scheduledWorkDays += 1;
 
         if (!attended) {
             if (isWorkDay && !holidayType && !isOnLeave) {
-                // Missed a regular working day with no holiday and no approved leave → absent
+                // Absent if no paid leave covering this day.
+                // Unpaid leave days are not in approvedLeaveDates, so they still trigger a deduction.
                 absentDays += 1;
             }
             // Regular holidays: employee is paid even without attendance (PH Labor Code Art. 94)
