@@ -976,6 +976,7 @@ export const getCompanyProfile = async (): Promise<CompanyProfile | null> => {
             logo: data.logo,
             workSchedule: data.work_schedule || WorkSchedule.MONDAY_TO_FRIDAY,
             gracePeriodMinutes: data.grace_period_minutes ?? 5,
+            employerShouldersContributions: data.employer_shoulders_contributions ?? false,
         };
     } catch (error) {
         console.error('Error fetching company profile:', error);
@@ -999,6 +1000,7 @@ export const updateCompanyProfile = async (profile: CompanyProfile): Promise<Com
                 logo: profile.logo,
                 work_schedule: profile.workSchedule,
                 grace_period_minutes: profile.gracePeriodMinutes,
+                employer_shoulders_contributions: profile.employerShouldersContributions ?? false,
             })
             .eq('id', currentCompanyId)
             .select()
@@ -1016,6 +1018,7 @@ export const updateCompanyProfile = async (profile: CompanyProfile): Promise<Com
             logo: data.logo,
             workSchedule: data.work_schedule || WorkSchedule.MONDAY_TO_FRIDAY,
             gracePeriodMinutes: data.grace_period_minutes ?? 5,
+            employerShouldersContributions: data.employer_shoulders_contributions ?? false,
         };
     } catch (error) {
         console.error('Error updating company profile:', error);
@@ -3320,6 +3323,7 @@ export const computeEmployeePayroll = async (params: {
     deMinimisExcess?: number;
     payFrequency: PayFrequency;
     workSchedule?: WorkSchedule;
+    employerShouldersContributions?: boolean;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3333,6 +3337,7 @@ export const computeEmployeePayroll = async (params: {
         deMinimisExempt = 0, deMinimisExcess = 0,
         payFrequency,
         workSchedule = WorkSchedule.MONDAY_TO_FRIDAY,
+        employerShouldersContributions = false,
     } = params;
 
     // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
@@ -3409,8 +3414,9 @@ export const computeEmployeePayroll = async (params: {
     const withholdingTax = Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
 
     // ── Net Pay ───────────────────────────────────────────────────────────────
-    // Gross already has attendance deductions subtracted; total deductions = contributions + tax
-    const totalDeductions = totalContributions + withholdingTax;
+    // When employer shoulders contributions, they are not deducted from employee take-home.
+    const employeeContributions = employerShouldersContributions ? 0 : totalContributions;
+    const totalDeductions = employeeContributions + withholdingTax;
     const netPay = grossPay - totalDeductions;
 
     return {
@@ -3739,6 +3745,7 @@ export const generatePayrollForPeriod = async (
         workSchedule?: WorkSchedule;
         gracePeriodMinutes?: number;
         holidays?: Holiday[];
+        employerShouldersContributions?: boolean;
     }
 ): Promise<PayrollRecord[]> => {
     // WorkSchedule is statically imported at the top of this file
@@ -3746,6 +3753,7 @@ export const generatePayrollForPeriod = async (
     const gracePeriodMinutes = options?.gracePeriodMinutes ?? 5;
     const holidays = options?.holidays ?? [];
     const companyWorkSchedule = options?.workSchedule ?? WorkSchedule.MONDAY_TO_FRIDAY;
+    const employerShouldersContributions = options?.employerShouldersContributions ?? false;
 
     const results: PayrollRecord[] = [];
     for (const emp of employees) {
@@ -3786,6 +3794,7 @@ export const generatePayrollForPeriod = async (
             otherBenefits: latestSalary.otherBenefits ?? 0,
             payFrequency: period.payFrequency,
             workSchedule: empSchedule,
+            employerShouldersContributions,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);

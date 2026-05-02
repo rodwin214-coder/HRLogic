@@ -783,6 +783,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
     const [holidays, setHolidays] = useState<Holiday[]>([]);
     const [companySchedule, setCompanySchedule] = useState<WorkSchedule>(WorkSchedule.MONDAY_TO_FRIDAY);
     const [gracePeriodMinutes, setGracePeriodMinutes] = useState(5);
+    const [employerShouldersContributions, setEmployerShouldersContributions] = useState(false);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
@@ -809,6 +810,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
         if (company) {
             setCompanySchedule(company.workSchedule);
             setGracePeriodMinutes(company.gracePeriodMinutes ?? 5);
+            setEmployerShouldersContributions(company.employerShouldersContributions ?? false);
         }
         setLoading(false);
     }, [period.id]);
@@ -822,6 +824,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
             workSchedule: companySchedule,
             gracePeriodMinutes,
             holidays,
+            employerShouldersContributions,
         });
         setRecords(result);
         setGenerating(false);

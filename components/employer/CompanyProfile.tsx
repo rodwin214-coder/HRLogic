@@ -200,8 +200,23 @@ const CompanyProfile: React.FC = () => {
                                 Employees can clock in this many minutes late and still be marked "On Time"
                             </p>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700">Employer Shoulders Contributions</label>
+                            <div className="flex items-center gap-3 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, employerShouldersContributions: !formData.employerShouldersContributions })}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formData.employerShouldersContributions ? 'bg-green-600' : 'bg-slate-300'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.employerShouldersContributions ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                                <span className="text-sm text-slate-600">
+                                    {formData.employerShouldersContributions ? 'Enabled — contributions not deducted from net pay' : 'Disabled — contributions deducted from employee net pay'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
-                    
+
                     {/* Action buttons */}
                     <div className="flex justify-end gap-2 pt-4">
                         <button type="button" onClick={handleEditToggle} className="btn btn-secondary">Cancel</button>
@@ -229,6 +244,7 @@ const CompanyProfile: React.FC = () => {
                         <ProfileField label="Contact Number" value={profile.contactNumber} />
                         <ProfileField label="Contact Email" value={profile.email} />
                         <ProfileField label="Grace Period" value={`${profile.gracePeriodMinutes ?? 5} minutes`} />
+                        <ProfileField label="Employer Shoulders Contributions" value={profile.employerShouldersContributions ? 'Yes — contributions not deducted from net pay' : 'No — contributions deducted from employee net pay'} />
                     </div>
                 </div>
             )}

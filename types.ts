@@ -199,6 +199,7 @@ export interface CompanyProfile {
     logo?: string; // base64 string
     workSchedule: WorkSchedule;
     gracePeriodMinutes?: number;
+    employerShouldersContributions?: boolean;
 }
 
 export interface AuditLogChange {
