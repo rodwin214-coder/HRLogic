@@ -3347,9 +3347,11 @@ export const computeEmployeePayroll = async (params: {
     const minuteRate   = hourlyRate / 60;
 
     // ── Basic Pay (fixed for the period) ─────────────────────────────────────
-    // Computed from scheduled work days so it represents the full earned basic
-    // before any deductions. Weekends/off-schedule days are already excluded.
-    const basicPay = dailyRate * scheduledWorkDays;
+    // Semi-monthly: exactly half the monthly salary per cut-off.
+    // Other frequencies: daily rate × scheduled work days in the period.
+    const basicPay = payFrequency === 'semi-monthly'
+        ? monthlyBasic / 2
+        : dailyRate * scheduledWorkDays;
 
     // ── Attendance Deductions ─────────────────────────────────────────────────
     // Absences: missed scheduled work days with no approved leave (incl. unpaid leave)

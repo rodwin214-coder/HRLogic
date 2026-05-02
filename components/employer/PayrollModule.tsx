@@ -48,7 +48,13 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
         { label: 'Daily Rate', formula: `₱${r.basicSalary.toFixed(2)} × 12 ÷ 52 wks ÷ work days/wk`, value: dailyRate, indent: true },
         { label: 'Hourly Rate', formula: `${fmt(dailyRate)} ÷ 8 hrs`, value: hourlyRate, indent: true },
         { label: 'Scheduled Work Days', formula: `Days worked (${r.daysWorked}) + Absent days (${r.absentDays})`, value: scheduledWorkDays, indent: true },
-        { label: 'Basic Pay', formula: `${fmt(dailyRate)} × ${scheduledWorkDays} sched days`, value: r.basicPay, bold: true, color: 'text-blue-700' },
+        {
+            label: 'Basic Pay',
+            formula: payFrequency === 'semi-monthly'
+                ? `₱${r.basicSalary.toFixed(2)} ÷ 2 (semi-monthly cut-off)`
+                : `${fmt(dailyRate)} × ${scheduledWorkDays} sched days`,
+            value: r.basicPay, bold: true, color: 'text-blue-700',
+        },
     ];
 
     const premiumRows: Row[] = [];
