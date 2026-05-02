@@ -2,14 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     PayrollPeriod, PayrollRecord, PayrollAdjustment, PayFrequency,
     PayrollStatus, AdjustmentType, Employee, DeMinimisItem, DeMinimisType,
+    Shift, Holiday, WorkSchedule,
 } from '../../types';
 import {
     getPayrollPeriods, createPayrollPeriod, updatePayrollPeriodStatus, deletePayrollPeriod,
     getPayrollRecords, upsertPayrollRecord, generatePayrollForPeriod,
     getPayrollAdjustments, addPayrollAdjustment, computeEmployeePayroll,
     getDeMinimisForPeriodEmployee, upsertDeMinimisItem, deleteDeMinimisItem,
-    DE_MINIMIS_CEILINGS, computeDeMinimisItem,
-    getEmployees,
+    DE_MINIMIS_CEILINGS,
+    getEmployees, getShifts, getHolidays, getCompanyProfile,
 } from '../../services/supabaseApi';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -163,6 +164,10 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             periodId: form.periodId,
             basicSalary: form.basicSalary,
             daysWorked: form.daysWorked,
+            hoursWorked: form.hoursWorked,
+            absentDays: form.absentDays,
+            lateMinutes: form.lateMinutes,
+            undertimeMinutes: form.undertimeMinutes,
             overtimeHours: form.overtimeHours,
             regularHolidayHours: form.regularHolidayHours,
             specialHolidayHours: form.specialHolidayHours,
@@ -248,15 +253,48 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                         </div>
                     </div>
 
-                    {/* Special Pay */}
-                    <div>
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">Special Hours</h3>
-                        <div className="grid grid-cols-3 gap-3">
+                    {/* Attendance Deductions */}
+                    <div className="border border-red-100 rounded-xl overflow-hidden">
+                        <div className="bg-red-50 px-4 py-2.5">
+                            <h3 className="text-sm font-semibold text-red-900">Attendance Deductions</h3>
+                            <p className="text-xs text-red-500 mt-0.5">Auto-computed from clock-in/out records vs. shift schedule</p>
+                        </div>
+                        <div className="p-4">
+                            <div className="grid grid-cols-3 gap-3 mb-3">
+                                {field('Absent Days', 'absentDays')}
+                                {field('Late (minutes)', 'lateMinutes')}
+                                {field('Undertime (minutes)', 'undertimeMinutes')}
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                {field('Absent Deduction', 'absentDeduction', true)}
+                                {field('Late Deduction', 'lateDeduction', true)}
+                                {field('Undertime Deduction', 'undertimeDeduction', true)}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Special Hours & Pay */}
+                    <div className="border border-blue-100 rounded-xl overflow-hidden">
+                        <div className="bg-blue-50 px-4 py-2.5">
+                            <h3 className="text-sm font-semibold text-blue-900">Special Hours & Premium Pay</h3>
+                            <p className="text-xs text-blue-500 mt-0.5">OT 125% · Regular holiday 200% · Special holiday 130% · Night diff +10% · Rest day 130%</p>
+                        </div>
+                        <div className="p-4 grid grid-cols-3 gap-3">
                             {field('OT Hours', 'overtimeHours')}
+                            {field('OT Pay', 'overtimePay', true)}
+                            <div />
                             {field('Regular Holiday Hrs', 'regularHolidayHours')}
+                            {field('Regular Holiday Pay', 'regularHolidayPay', true)}
+                            <div />
                             {field('Special Holiday Hrs', 'specialHolidayHours')}
+                            {field('Special Holiday Pay', 'specialHolidayPay', true)}
+                            <div />
                             {field('Night Diff Hours', 'nightDiffHours')}
+                            {field('Night Diff Pay', 'nightDiffPay', true)}
+                            <div />
                             {field('Rest Day Hours', 'restDayHours')}
+                            {field('Rest Day Pay', 'restDayPay', true)}
+                            <div />
                             {field('Allowance', 'allowance')}
                         </div>
                     </div>
@@ -345,10 +383,10 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                         </div>
                     </div>
 
-                    {/* Computed */}
+                    {/* Computed Summary */}
                     <div className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-sm font-semibold text-gray-800">Computed Amounts</h3>
+                            <h3 className="text-sm font-semibold text-gray-800">Computed Summary</h3>
                             <button onClick={recompute} disabled={computing}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50">
                                 {computing ? 'Computing…' : '↻ Recompute'}
@@ -356,7 +394,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                         </div>
                         <div className="grid grid-cols-4 gap-3">
                             {field('Basic Pay', 'basicPay', true)}
-                            {field('OT Pay', 'overtimePay', true)}
+                            {field('Hours Worked', 'hoursWorked', true)}
                             {field('De Minimis Total', 'deMinimis', true)}
                             {field('Gross Pay', 'grossPay', true)}
                         </div>
@@ -507,6 +545,10 @@ interface PeriodDetailProps {
 const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, onStatusChange }) => {
     const [records, setRecords] = useState<PayrollRecord[]>([]);
     const [adjustments, setAdjustments] = useState<PayrollAdjustment[]>([]);
+    const [shifts, setShifts] = useState<Shift[]>([]);
+    const [holidays, setHolidays] = useState<Holiday[]>([]);
+    const [companySchedule, setCompanySchedule] = useState<WorkSchedule>(WorkSchedule.MONDAY_TO_FRIDAY);
+    const [gracePeriodMinutes, setGracePeriodMinutes] = useState(5);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
@@ -518,12 +560,21 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
 
     const loadData = useCallback(async () => {
         setLoading(true);
-        const [recs, adjs] = await Promise.all([
+        const [recs, adjs, shiftsData, holidaysData, company] = await Promise.all([
             getPayrollRecords(period.id),
             getPayrollAdjustments(period.id),
+            getShifts(),
+            getHolidays(),
+            getCompanyProfile(),
         ]);
         setRecords(recs);
         setAdjustments(adjs);
+        setShifts(shiftsData);
+        setHolidays(holidaysData);
+        if (company) {
+            setCompanySchedule(company.workSchedule);
+            setGracePeriodMinutes(company.gracePeriodMinutes ?? 5);
+        }
         setLoading(false);
     }, [period.id]);
 
@@ -531,7 +582,12 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
 
     const handleGenerate = async () => {
         setGenerating(true);
-        const result = await generatePayrollForPeriod(period, employees);
+        const result = await generatePayrollForPeriod(period, employees, {
+            shifts,
+            workSchedule: companySchedule,
+            gracePeriodMinutes,
+            holidays,
+        });
         setRecords(result);
         setGenerating(false);
     };

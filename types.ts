@@ -305,6 +305,13 @@ export interface PayrollRecord {
     daysWorked: number;
     hoursWorked: number;
     basicPay: number;
+    // Attendance deductions
+    absentDays: number;
+    absentDeduction: number;
+    lateMinutes: number;
+    lateDeduction: number;
+    undertimeMinutes: number;
+    undertimeDeduction: number;
     // Overtime & Special
     overtimeHours: number;
     overtimePay: number;
