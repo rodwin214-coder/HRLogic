@@ -325,6 +325,7 @@ export interface PayrollRecord {
     restDayPay: number;
     // Allowances
     allowance: number;
+    otherBenefits: number;
     deMinimis: number;
     thirteenthMonthAccrued: number;
     grossPay: number;

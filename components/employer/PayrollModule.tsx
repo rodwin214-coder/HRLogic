@@ -93,10 +93,17 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
             value: r.allowance, color: 'text-green-700',
         });
     }
+    if (r.otherBenefits > 0) {
+        benefitRows.push({
+            label: 'Other Benefits',
+            formula: benefitDivisor > 1 ? `Monthly other benefits ÷ ${benefitDivisor} (${payFrequency})` : 'Monthly other benefits',
+            value: r.otherBenefits, color: 'text-green-700',
+        });
+    }
     if (r.deMinimis > 0) {
         benefitRows.push({
-            label: 'Other Benefits / De Minimis',
-            formula: `Non-taxable benefits this period`,
+            label: 'De Minimis Benefits',
+            formula: `Non-taxable de minimis this period`,
             value: r.deMinimis, color: 'text-green-700',
         });
     }
@@ -104,7 +111,7 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
     const grossCalc = r.basicPay
         + (r.overtimePay + r.regularHolidayPay + r.specialHolidayPay + r.nightDiffPay + r.restDayPay)
         - (r.absentDeduction + r.lateDeduction + r.undertimeDeduction)
-        + r.allowance + r.deMinimis;
+        + r.allowance + r.otherBenefits + r.deMinimis;
 
     const monthlyContrib = r.sssContribution * benefitDivisor + r.philhealthContribution * benefitDivisor + r.pagibigContribution * benefitDivisor;
     const taxableIncome = r.taxableIncome;
@@ -919,7 +926,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
+                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -942,6 +949,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 <td className="px-3 py-3 text-red-600">{r.absentDeduction > 0 ? `-${fmt(r.absentDeduction)}` : '—'}</td>
                                                 <td className="px-3 py-3 text-red-600">{tardiness > 0 ? `-${fmt(tardiness)}` : '—'}</td>
                                                 <td className="px-3 py-3 text-green-700">{r.allowance > 0 ? fmt(r.allowance) : '—'}</td>
+                                                <td className="px-3 py-3 text-green-700">{r.otherBenefits > 0 ? fmt(r.otherBenefits) : '—'}</td>
                                                 <td className="px-3 py-3 text-green-700">{r.deMinimis > 0 ? fmt(r.deMinimis) : '—'}</td>
                                                 <td className="px-3 py-3 font-medium text-gray-900">{fmt(r.grossPay)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.sssContribution)}</td>
@@ -977,6 +985,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         <td className="px-3 py-3 text-red-700">-{fmt(records.reduce((s, r) => s + r.absentDeduction, 0))}</td>
                                         <td className="px-3 py-3 text-red-700">-{fmt(records.reduce((s, r) => s + r.lateDeduction + r.undertimeDeduction, 0))}</td>
                                         <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.allowance, 0))}</td>
+                                        <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.otherBenefits, 0))}</td>
                                         <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.deMinimis, 0))}</td>
                                         <td className="px-3 py-3">{fmt(totalGross)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalSSS)}</td>
