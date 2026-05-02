@@ -3023,6 +3023,8 @@ export const computeWithholdingTax = async (annualTaxableIncome: number): Promis
 };
 
 // Compute full payroll record for one employee for a period
+// deMinimisExempt = total BIR-exempt de minimis (not taxable, added to gross)
+// deMinimisExcess = portion over BIR ceiling (becomes part of taxable compensation)
 export const computeEmployeePayroll = async (params: {
     employeeId: string;
     companyId: string;
@@ -3035,59 +3037,50 @@ export const computeEmployeePayroll = async (params: {
     nightDiffHours?: number;
     restDayHours?: number;
     allowance?: number;
-    deMinimis?: number;
+    deMinimisExempt?: number;
+    deMinimisExcess?: number;
     payFrequency: PayFrequency;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary, daysWorked,
         overtimeHours = 0, regularHolidayHours = 0, specialHolidayHours = 0,
-        nightDiffHours = 0, restDayHours = 0, allowance = 0, deMinimis = 0,
+        nightDiffHours = 0, restDayHours = 0, allowance = 0,
+        deMinimisExempt = 0, deMinimisExcess = 0,
         payFrequency,
     } = params;
 
-    // Working days per period based on frequency
     const periodsPerYear: Record<PayFrequency, number> = {
         weekly: 52, 'bi-weekly': 26, 'semi-monthly': 24, monthly: 12,
     };
     const totalPeriodsYear = periodsPerYear[payFrequency];
-    const monthlyEquivalent = payFrequency === 'monthly' ? basicSalary
-        : payFrequency === 'semi-monthly' ? basicSalary
-        : basicSalary; // already monthly
+    const monthlyEquivalent = basicSalary;
 
-    // Daily rate (monthly / 22 working days standard)
     const dailyRate = monthlyEquivalent / 22;
     const hourlyRate = dailyRate / 8;
 
     const basicPay = dailyRate * daysWorked;
-
-    // OT = 125% of hourly rate
     const overtimePay = overtimeHours * hourlyRate * 1.25;
-    // Regular holiday = 200% of hourly rate
     const regularHolidayPay = regularHolidayHours * hourlyRate * 2.0;
-    // Special holiday = 130% of hourly rate
     const specialHolidayPay = specialHolidayHours * hourlyRate * 1.3;
-    // Night diff = 110% of hourly rate
-    const nightDiffPay = nightDiffHours * hourlyRate * 0.10; // 10% premium
-    // Rest day = 130% of hourly rate
+    const nightDiffPay = nightDiffHours * hourlyRate * 0.10;
     const restDayPay = restDayHours * hourlyRate * 1.3;
-
-    // 13th month accrual (basic / 12)
     const thirteenthMonthAccrued = monthlyEquivalent / 12;
 
+    // Total de minimis = exempt + excess over ceiling
+    const totalDeMinimis = deMinimisExempt + deMinimisExcess;
     const grossPay = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
-        + nightDiffPay + restDayPay + allowance + deMinimis;
+        + nightDiffPay + restDayPay + allowance + totalDeMinimis;
 
-    // Contributions based on monthly equivalent
     const sssContribution = await computeSSSContribution(monthlyEquivalent);
     const philhealthContribution = await computePhilHealthContribution(monthlyEquivalent);
     const pagibigContribution = await computePagIBIGContribution(monthlyEquivalent);
     const totalContributions = sssContribution + philhealthContribution + pagibigContribution;
 
-    // Taxable income per period = gross - contributions - de minimis exemption
-    // De minimis exempt up to PHP 90,000/year aggregate
-    const periodGrossForTax = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
-        + nightDiffPay + restDayPay + allowance;
-    const taxablePerPeriod = Math.max(0, periodGrossForTax - totalContributions);
+    // Taxable compensation = basic pay + special pays + allowance + de minimis EXCESS
+    // De minimis EXEMPT portion is excluded from taxable income (BIR RR 5-2011)
+    const periodCompensationForTax = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
+        + nightDiffPay + restDayPay + allowance + deMinimisExcess;
+    const taxablePerPeriod = Math.max(0, periodCompensationForTax - totalContributions);
     const annualTaxable = taxablePerPeriod * totalPeriodsYear;
     const annualTax = await computeWithholdingTax(annualTaxable);
     const withholdingTax = Math.max(0, annualTax / totalPeriodsYear);
@@ -3115,7 +3108,7 @@ export const computeEmployeePayroll = async (params: {
         restDayHours,
         restDayPay,
         allowance,
-        deMinimis,
+        deMinimis: totalDeMinimis,
         thirteenthMonthAccrued,
         grossPay,
         sssContribution,
@@ -3133,6 +3126,128 @@ export const computeEmployeePayroll = async (params: {
         status: 'Draft',
         notes: '',
     };
+};
+
+// BIR de minimis monthly ceilings (TRAIN Law / RR 5-2011 as amended)
+export const DE_MINIMIS_CEILINGS: Record<import('../types').DeMinimisType, { label: string; monthlyCeiling: number; note: string }> = {
+    rice_subsidy:               { label: 'Rice Subsidy',                  monthlyCeiling: 3000,  note: 'Max ₱3,000/month (RR 5-2011)' },
+    uniform_clothing:           { label: 'Uniform & Clothing Allowance',  monthlyCeiling: 500,   note: 'Max ₱6,000/year (₱500/month)' },
+    medical_cash_allowance:     { label: 'Medical Cash Allowance',        monthlyCeiling: 750,   note: 'Max ₱1,500/semester (₱750/quarter)' },
+    laundry_allowance:          { label: 'Laundry Allowance',             monthlyCeiling: 300,   note: 'Max ₱300/month' },
+    employee_achievement_award: { label: 'Employee Achievement Award',    monthlyCeiling: 833,   note: 'Max ₱10,000/year (₱833/month)' },
+    christmas_gift:             { label: 'Christmas / Anniversary Gift',  monthlyCeiling: 417,   note: 'Max ₱5,000/year (₱417/month)' },
+    meal_allowance_overtime:    { label: 'Meal Allowance (OT)',           monthlyCeiling: 1200,  note: '25% of min. wage per OT meal' },
+    actual_medical_benefits:    { label: 'Actual Medical Benefits',       monthlyCeiling: 833,   note: 'Max ₱10,000/year (₱833/month)' },
+    other:                      { label: 'Other De Minimis',              monthlyCeiling: 0,     note: 'Enter ceiling manually' },
+};
+
+export const computeDeMinimisItem = (
+    benefitType: import('../types').DeMinimisType,
+    amountThisPeriod: number,
+    customMonthlyCeiling?: number,
+): { monthlyCeiling: number; exemptAmount: number; taxableExcess: number } => {
+    const cfg = DE_MINIMIS_CEILINGS[benefitType];
+    const ceiling = customMonthlyCeiling ?? cfg.monthlyCeiling;
+    const exemptAmount = Math.min(amountThisPeriod, ceiling);
+    const taxableExcess = Math.max(0, amountThisPeriod - ceiling);
+    return { monthlyCeiling: ceiling, exemptAmount, taxableExcess };
+};
+
+export const getDeMinimisForPeriodEmployee = async (
+    periodId: string,
+    employeeId: string,
+): Promise<import('../types').DeMinimisItem[]> => {
+    try {
+        await ensureUserContext();
+        const { data, error } = await supabase
+            .from('payroll_de_minimis')
+            .select('*')
+            .eq('period_id', periodId)
+            .eq('employee_id', employeeId);
+        if (error) throw error;
+        return (data ?? []).map((r: any) => ({
+            id: r.id,
+            companyId: r.company_id,
+            periodId: r.period_id,
+            employeeId: r.employee_id,
+            benefitType: r.benefit_type,
+            description: r.description ?? '',
+            amountThisPeriod: Number(r.amount_this_period),
+            monthlyCeiling: Number(r.monthly_ceiling),
+            exemptAmount: Number(r.exempt_amount),
+            taxableExcess: Number(r.taxable_excess),
+            createdAt: r.created_at,
+        }));
+    } catch (err) {
+        console.error('getDeMinimisForPeriodEmployee error:', err);
+        return [];
+    }
+};
+
+export const upsertDeMinimisItem = async (item: {
+    periodId: string;
+    employeeId: string;
+    benefitType: import('../types').DeMinimisType;
+    description?: string;
+    amountThisPeriod: number;
+    customMonthlyCeiling?: number;
+}): Promise<import('../types').DeMinimisItem | null> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) throw new Error('Company ID not set');
+        const { monthlyCeiling, exemptAmount, taxableExcess } = computeDeMinimisItem(
+            item.benefitType, item.amountThisPeriod, item.customMonthlyCeiling,
+        );
+        // Delete existing entry of same type for this employee+period, then re-insert
+        await supabase
+            .from('payroll_de_minimis')
+            .delete()
+            .eq('period_id', item.periodId)
+            .eq('employee_id', item.employeeId)
+            .eq('benefit_type', item.benefitType);
+
+        const { data, error } = await supabase
+            .from('payroll_de_minimis')
+            .insert([{
+                company_id: currentCompanyId,
+                period_id: item.periodId,
+                employee_id: item.employeeId,
+                benefit_type: item.benefitType,
+                description: item.description ?? DE_MINIMIS_CEILINGS[item.benefitType].label,
+                amount_this_period: item.amountThisPeriod,
+                monthly_ceiling: monthlyCeiling,
+                exempt_amount: exemptAmount,
+                taxable_excess: taxableExcess,
+            }])
+            .select()
+            .single();
+        if (error) throw error;
+        return {
+            id: data.id,
+            companyId: data.company_id,
+            periodId: data.period_id,
+            employeeId: data.employee_id,
+            benefitType: data.benefit_type,
+            description: data.description ?? '',
+            amountThisPeriod: Number(data.amount_this_period),
+            monthlyCeiling: Number(data.monthly_ceiling),
+            exemptAmount: Number(data.exempt_amount),
+            taxableExcess: Number(data.taxable_excess),
+            createdAt: data.created_at,
+        };
+    } catch (err) {
+        console.error('upsertDeMinimisItem error:', err);
+        return null;
+    }
+};
+
+export const deleteDeMinimisItem = async (id: string): Promise<void> => {
+    try {
+        await ensureUserContext();
+        await supabase.from('payroll_de_minimis').delete().eq('id', id);
+    } catch (err) {
+        console.error('deleteDeMinimisItem error:', err);
+    }
 };
 
 export const getPayrollPeriods = async (): Promise<PayrollPeriod[]> => {

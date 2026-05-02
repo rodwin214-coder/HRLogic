@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     PayrollPeriod, PayrollRecord, PayrollAdjustment, PayFrequency,
-    PayrollStatus, AdjustmentType, Employee,
+    PayrollStatus, AdjustmentType, Employee, DeMinimisItem, DeMinimisType,
 } from '../../types';
 import {
     getPayrollPeriods, createPayrollPeriod, updatePayrollPeriodStatus, deletePayrollPeriod,
     getPayrollRecords, upsertPayrollRecord, generatePayrollForPeriod,
     getPayrollAdjustments, addPayrollAdjustment, computeEmployeePayroll,
+    getDeMinimisForPeriodEmployee, upsertDeMinimisItem, deleteDeMinimisItem,
+    DE_MINIMIS_CEILINGS, computeDeMinimisItem,
     getEmployees,
 } from '../../services/supabaseApi';
 
@@ -128,10 +130,27 @@ interface EditRecordModalProps {
     period: PayrollPeriod;
 }
 
+const DE_MINIMIS_TYPES = Object.entries(DE_MINIMIS_CEILINGS) as [DeMinimisType, { label: string; monthlyCeiling: number; note: string }][];
+
 const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName, onClose, onSave, period }) => {
     const [form, setForm] = useState({ ...record });
+    const [deMinimisItems, setDeMinimisItems] = useState<DeMinimisItem[]>([]);
+    const [loadingDM, setLoadingDM] = useState(true);
+    const [addingType, setAddingType] = useState<DeMinimisType>('rice_subsidy');
+    const [addingAmount, setAddingAmount] = useState('');
+    const [addingCeiling, setAddingCeiling] = useState('');
     const [computing, setComputing] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        getDeMinimisForPeriodEmployee(record.periodId, record.employeeId).then(items => {
+            setDeMinimisItems(items);
+            setLoadingDM(false);
+        });
+    }, [record.periodId, record.employeeId]);
+
+    const totalExempt = deMinimisItems.reduce((s, i) => s + i.exemptAmount, 0);
+    const totalExcess = deMinimisItems.reduce((s, i) => s + i.taxableExcess, 0);
 
     const setN = (k: keyof PayrollRecord, v: string) =>
         setForm(prev => ({ ...prev, [k]: parseFloat(v) || 0 }));
@@ -150,16 +169,48 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             nightDiffHours: form.nightDiffHours,
             restDayHours: form.restDayHours,
             allowance: form.allowance,
-            deMinimis: form.deMinimis,
+            deMinimisExempt: totalExempt,
+            deMinimisExcess: totalExcess,
             payFrequency: period.payFrequency,
         });
         setForm(prev => ({ ...prev, ...computed, id: prev.id }));
         setComputing(false);
     };
 
+    const handleAddDeMinimis = async () => {
+        if (!addingAmount) return;
+        const amount = parseFloat(addingAmount);
+        const customCeiling = addingCeiling ? parseFloat(addingCeiling) : undefined;
+        const saved = await upsertDeMinimisItem({
+            periodId: record.periodId,
+            employeeId: record.employeeId,
+            benefitType: addingType,
+            amountThisPeriod: amount,
+            customMonthlyCeiling: customCeiling,
+        });
+        if (saved) {
+            setDeMinimisItems(prev => {
+                const filtered = prev.filter(i => i.benefitType !== addingType);
+                return [...filtered, saved];
+            });
+            setAddingAmount('');
+            setAddingCeiling('');
+        }
+    };
+
+    const handleRemoveDeMinimis = async (item: DeMinimisItem) => {
+        await deleteDeMinimisItem(item.id);
+        setDeMinimisItems(prev => prev.filter(i => i.id !== item.id));
+    };
+
     const handleSave = async () => {
         setSaving(true);
-        const saved = await upsertPayrollRecord(form);
+        // Sync de minimis totals into the record before saving
+        const updatedForm = {
+            ...form,
+            deMinimis: totalExempt + totalExcess,
+        };
+        const saved = await upsertPayrollRecord(updatedForm);
         setSaving(false);
         if (saved) onSave(saved);
     };
@@ -196,6 +247,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                             {field('Daily Rate', 'dailyRate', true)}
                         </div>
                     </div>
+
                     {/* Special Pay */}
                     <div>
                         <h3 className="text-sm font-semibold text-gray-800 mb-3">Special Hours</h3>
@@ -208,6 +260,91 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                             {field('Allowance', 'allowance')}
                         </div>
                     </div>
+
+                    {/* De Minimis Benefits */}
+                    <div className="border border-teal-200 rounded-xl overflow-hidden">
+                        <div className="bg-teal-50 px-4 py-3 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-semibold text-teal-900">De Minimis Benefits</h3>
+                                <p className="text-xs text-teal-600 mt-0.5">BIR RR 5-2011 · TRAIN Law · Tax-exempt within ceiling</p>
+                            </div>
+                            <div className="text-right text-xs">
+                                <div className="text-teal-700 font-semibold">Exempt: {fmt(totalExempt)}</div>
+                                {totalExcess > 0 && <div className="text-red-600">Taxable excess: {fmt(totalExcess)}</div>}
+                            </div>
+                        </div>
+                        <div className="p-4 space-y-3">
+                            {loadingDM ? (
+                                <p className="text-xs text-gray-400">Loading…</p>
+                            ) : deMinimisItems.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic">No de minimis benefits added yet.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {deMinimisItems.map(item => {
+                                        const cfg = DE_MINIMIS_CEILINGS[item.benefitType];
+                                        return (
+                                            <div key={item.id} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-gray-800">{cfg.label}</p>
+                                                    <p className="text-xs text-gray-400">{cfg.note}</p>
+                                                </div>
+                                                <div className="flex items-center gap-4 ml-3 text-xs text-right flex-shrink-0">
+                                                    <div>
+                                                        <p className="text-gray-500">Given</p>
+                                                        <p className="font-medium">{fmt(item.amountThisPeriod)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-teal-600">Exempt</p>
+                                                        <p className="font-semibold text-teal-700">{fmt(item.exemptAmount)}</p>
+                                                    </div>
+                                                    {item.taxableExcess > 0 && (
+                                                        <div>
+                                                            <p className="text-red-500">Taxable</p>
+                                                            <p className="font-semibold text-red-600">{fmt(item.taxableExcess)}</p>
+                                                        </div>
+                                                    )}
+                                                    <button onClick={() => handleRemoveDeMinimis(item)}
+                                                        className="text-gray-300 hover:text-red-500 text-base leading-none ml-1">×</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* Add de minimis row */}
+                            <div className="flex gap-2 items-end pt-1 border-t border-gray-100">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-gray-500 mb-0.5">Benefit Type</label>
+                                    <select value={addingType} onChange={e => setAddingType(e.target.value as DeMinimisType)}
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500">
+                                        {DE_MINIMIS_TYPES.map(([k, v]) => (
+                                            <option key={k} value={k}>{v.label} (ceiling: {fmt(v.monthlyCeiling)}/mo)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="w-28">
+                                    <label className="block text-xs text-gray-500 mb-0.5">Amount</label>
+                                    <input type="number" value={addingAmount} onChange={e => setAddingAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                </div>
+                                {addingType === 'other' && (
+                                    <div className="w-28">
+                                        <label className="block text-xs text-gray-500 mb-0.5">Custom Ceiling</label>
+                                        <input type="number" value={addingCeiling} onChange={e => setAddingCeiling(e.target.value)}
+                                            placeholder="0.00"
+                                            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                                    </div>
+                                )}
+                                <button onClick={handleAddDeMinimis} disabled={!addingAmount}
+                                    className="px-3 py-1.5 text-xs font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50 flex-shrink-0">
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Computed */}
                     <div className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -220,10 +357,11 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                         <div className="grid grid-cols-4 gap-3">
                             {field('Basic Pay', 'basicPay', true)}
                             {field('OT Pay', 'overtimePay', true)}
-                            {field('Holiday Pay', 'regularHolidayPay', true)}
+                            {field('De Minimis Total', 'deMinimis', true)}
                             {field('Gross Pay', 'grossPay', true)}
                         </div>
                     </div>
+
                     {/* Contributions */}
                     <div>
                         <h3 className="text-sm font-semibold text-gray-800 mb-3">Government Contributions</h3>
@@ -234,6 +372,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                             {field('W/Tax', 'withholdingTax', true)}
                         </div>
                     </div>
+
                     {/* Loans */}
                     <div>
                         <h3 className="text-sm font-semibold text-gray-800 mb-3">Loans & Other Deductions</h3>

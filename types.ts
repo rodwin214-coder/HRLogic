@@ -256,6 +256,31 @@ export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly';
 export type PayrollStatus = 'Draft' | 'Finalized' | 'Paid';
 export type AdjustmentType = 'bonus' | 'commission' | 'allowance' | 'sss_loan' | 'pagibig_loan' | 'cash_advance' | 'other_deduction' | 'other_addition';
 
+export type DeMinimisType =
+    | 'rice_subsidy'
+    | 'uniform_clothing'
+    | 'medical_cash_allowance'
+    | 'laundry_allowance'
+    | 'employee_achievement_award'
+    | 'christmas_gift'
+    | 'meal_allowance_overtime'
+    | 'actual_medical_benefits'
+    | 'other';
+
+export interface DeMinimisItem {
+    id: string;
+    companyId: string;
+    periodId: string;
+    employeeId: string;
+    benefitType: DeMinimisType;
+    description: string;
+    amountThisPeriod: number;
+    monthlyCeiling: number;
+    exemptAmount: number;
+    taxableExcess: number;
+    createdAt: string;
+}
+
 export interface PayrollPeriod {
     id: string;
     companyId: string;
