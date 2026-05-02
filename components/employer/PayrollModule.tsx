@@ -1318,15 +1318,21 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                 )}
                 {period.status === 'Draft' && records.length > 0 && (
                     <button onClick={() => onStatusChange('Finalized')}
-                        className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
                         Finalize
                     </button>
                 )}
                 {period.status === 'Finalized' && (
-                    <button onClick={() => onStatusChange('Paid')}
-                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">
-                        Mark Paid
-                    </button>
+                    <>
+                        <button onClick={() => onStatusChange('Draft')}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            Revert to Draft
+                        </button>
+                        <button onClick={() => onStatusChange('Paid')}
+                            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">
+                            Mark Paid
+                        </button>
+                    </>
                 )}
             </div>
 
