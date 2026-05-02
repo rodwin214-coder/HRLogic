@@ -2983,9 +2983,10 @@ function dbRecordToPayrollRecord(r: any): PayrollRecord {
 // ─── Attendance Analysis ─────────────────────────────────────────────────────
 
 export interface AttendanceAnalysis {
-    daysWorked: number;
+    scheduledWorkDays: number; // total working days in the period per schedule (excl. weekends/off days)
+    daysWorked: number;        // days the employee actually attended
     hoursWorked: number;
-    absentDays: number;
+    absentDays: number;        // scheduled work days with no attendance and no approved leave
     lateMinutes: number;
     undertimeMinutes: number;
     overtimeHours: number;
@@ -3123,55 +3124,66 @@ export const analyzeAttendanceForPayroll = async (params: {
     const holidayMap: Record<string, 'Regular' | 'Special'> = {};
     for (const h of holidays) holidayMap[h.date] = h.type;
 
-    const workDayNums = workingDayNumbers(workSchedule);
+    const workDayNums   = workingDayNumbers(workSchedule);
     const shiftStartMin = shift ? timeToMinutes(shift.startTime) : 8 * 60;
     const shiftEndMin   = shift ? timeToMinutes(shift.endTime)   : 17 * 60;
 
-    let daysWorked = 0;
-    let hoursWorked = 0;
-    let absentDays = 0;
-    let lateMinutes = 0;
-    let undertimeMinutes = 0;
-    let overtimeHours = 0;
+    let scheduledWorkDays = 0;
+    let daysWorked        = 0;
+    let hoursWorked       = 0;
+    let absentDays        = 0;
+    let lateMinutes       = 0;
+    let undertimeMinutes  = 0;
+    let overtimeHours     = 0;
     let regularHolidayHours = 0;
     let specialHolidayHours = 0;
-    let restDayHours = 0;
-    let nightDiffHours = 0;
+    let restDayHours      = 0;
+    let nightDiffHours    = 0;
 
     for (const date of dateRange(periodStart, periodEnd)) {
-        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-        const isWorkDay = workDayNums.includes(dayOfWeek);
-        const isRestDay = !isWorkDay;
-        const holidayType = holidayMap[date];
-        const attended = byDate[date];
+        const dayOfWeek    = new Date(date + 'T00:00:00').getDay();
+        const isWorkDay    = workDayNums.includes(dayOfWeek);
+        const isRestDay    = !isWorkDay;
+        const holidayType  = holidayMap[date];
+        const attended     = byDate[date];
+        const isOnLeave    = approvedLeaveDates.has(date);
+
+        // Count scheduled work days (regular working days only, excl. weekends/off-schedule)
+        if (isWorkDay) scheduledWorkDays += 1;
 
         if (!attended) {
-            // Only deduct as absent if it's a working day, not a holiday, and not covered by approved leave
-            if (isWorkDay && !holidayType && !approvedLeaveDates.has(date)) absentDays += 1;
+            if (isWorkDay && !holidayType && !isOnLeave) {
+                // Missed a regular working day with no holiday and no approved leave → absent
+                absentDays += 1;
+            }
+            // Regular holidays: employee is paid even without attendance (PH Labor Code Art. 94)
+            // No daysWorked increment needed — basic pay already covers the period rate
             continue;
         }
 
+        // Employee clocked in — process the day
         const { clockInMin, clockOutMin } = attended;
-        // Cap effective clock-out at shift end for normal day calculation;
-        // overtime beyond shift end is only credited if there is an approved OT request.
-        const effectiveClockOut = clockOutMin ?? shiftEndMin;
+
+        // Overtime beyond shift end only credited with an approved OT request
+        const effectiveClockOut  = clockOutMin ?? shiftEndMin;
         const clockOutForRegular = Math.min(effectiveClockOut, shiftEndMin);
 
         const workedMin = Math.max(0, clockOutForRegular - clockInMin);
         hoursWorked += workedMin / 60;
 
-        // Tardiness
+        // Tardiness: late if clocked in after grace period; deduction = minutes from shift start to actual clock-in
         const graceDeadline = shiftStartMin + gracePeriodMinutes;
         if (isWorkDay && clockInMin > graceDeadline) {
             lateMinutes += clockInMin - shiftStartMin;
         }
 
-        // Undertime (only when clocked out before shift end with no approved OT)
-        if (clockOutMin !== null && clockOutMin < shiftEndMin && isWorkDay) {
+        // Undertime: clocked out before shift end (no approved OT on that day)
+        const otRequest = approvedOT[date];
+        if (clockOutMin !== null && clockOutMin < shiftEndMin && isWorkDay && !otRequest) {
             undertimeMinutes += shiftEndMin - clockOutMin;
         }
 
-        // Holiday / rest day classification uses regular worked hours
+        // Holiday / rest day earnings classification
         if (isRestDay) {
             restDayHours += workedMin / 60;
         } else if (holidayType === 'Regular') {
@@ -3180,41 +3192,40 @@ export const analyzeAttendanceForPayroll = async (params: {
             specialHolidayHours += workedMin / 60;
         }
 
-        // Overtime — only from approved OT requests for this date
-        const otRequest = approvedOT[date];
+        // Overtime — sourced from approved OT requests only
         if (otRequest) {
-            const approvedHours = otRequest.hours;
+            const approvedHrs    = otRequest.hours;
             const reqHolidayType = otRequest.holidayType;
-            if (isRestDay) {
-                // Rest day OT — already counted above, no extra here
-            } else if (reqHolidayType === 'Regular') {
-                regularHolidayHours += approvedHours;
+            if (reqHolidayType === 'Regular') {
+                regularHolidayHours += approvedHrs;
             } else if (reqHolidayType === 'Special') {
-                specialHolidayHours += approvedHours;
+                specialHolidayHours += approvedHrs;
             } else {
-                overtimeHours += approvedHours;
+                overtimeHours += approvedHrs;
             }
-            // Add approved OT to total hours worked
-            hoursWorked += approvedHours;
+            hoursWorked += approvedHrs;
         }
 
-        // Night differential: minutes worked between 22:00–06:00 (shift portion only)
+        // Night differential (22:00–06:00 window, shift portion only)
         nightDiffHours += nightDiffMinutesInRange(clockInMin, clockOutForRegular) / 60;
 
-        if (isWorkDay || holidayType || isRestDay) daysWorked += 1;
+        // Count as a worked day only for regular work days and special holidays with attendance
+        // Regular holidays are paid regardless of attendance (handled above via basic pay)
+        if (isWorkDay || holidayType === 'Special' || isRestDay) daysWorked += 1;
     }
 
     return {
-        daysWorked: Math.round(daysWorked * 100) / 100,
-        hoursWorked: Math.round(hoursWorked * 100) / 100,
-        absentDays: Math.round(absentDays * 100) / 100,
-        lateMinutes: Math.round(lateMinutes * 100) / 100,
-        undertimeMinutes: Math.round(undertimeMinutes * 100) / 100,
-        overtimeHours: Math.round(overtimeHours * 100) / 100,
+        scheduledWorkDays: Math.round(scheduledWorkDays * 100) / 100,
+        daysWorked:        Math.round(daysWorked * 100) / 100,
+        hoursWorked:       Math.round(hoursWorked * 100) / 100,
+        absentDays:        Math.round(absentDays * 100) / 100,
+        lateMinutes:       Math.round(lateMinutes * 100) / 100,
+        undertimeMinutes:  Math.round(undertimeMinutes * 100) / 100,
+        overtimeHours:     Math.round(overtimeHours * 100) / 100,
         regularHolidayHours: Math.round(regularHolidayHours * 100) / 100,
         specialHolidayHours: Math.round(specialHolidayHours * 100) / 100,
-        restDayHours: Math.round(restDayHours * 100) / 100,
-        nightDiffHours: Math.round(nightDiffHours * 100) / 100,
+        restDayHours:      Math.round(restDayHours * 100) / 100,
+        nightDiffHours:    Math.round(nightDiffHours * 100) / 100,
     };
 };
 
@@ -3283,6 +3294,7 @@ export const computeEmployeePayroll = async (params: {
     companyId: string;
     periodId: string;
     basicSalary: number;
+    scheduledWorkDays: number;
     daysWorked: number;
     hoursWorked?: number;
     absentDays?: number;
@@ -3300,7 +3312,8 @@ export const computeEmployeePayroll = async (params: {
     payFrequency: PayFrequency;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
-        employeeId, companyId, periodId, basicSalary, daysWorked,
+        employeeId, companyId, periodId, basicSalary,
+        scheduledWorkDays, daysWorked,
         hoursWorked: hoursWorkedParam,
         absentDays = 0, lateMinutes = 0, undertimeMinutes = 0,
         overtimeHours = 0, regularHolidayHours = 0, specialHolidayHours = 0,
@@ -3311,61 +3324,72 @@ export const computeEmployeePayroll = async (params: {
         payFrequency,
     } = params;
 
-    // For semi-monthly, allowance and other benefits are split across 2 pay periods
+    // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const allowance     = rawAllowance / benefitDivisor;
     const otherBenefits = rawOtherBenefits / benefitDivisor;
 
-    // Monthly basic salary is always the reference for contributions and tax
     const monthlyBasic = basicSalary;
+    const dailyRate    = monthlyBasic / 22;
+    const hourlyRate   = dailyRate / 8;
+    const minuteRate   = hourlyRate / 60;
 
-    const dailyRate  = monthlyBasic / 22;
-    const hourlyRate = dailyRate / 8;
-    const minuteRate = hourlyRate / 60;
+    // ── Basic Pay (fixed for the period) ─────────────────────────────────────
+    // Computed from scheduled work days so it represents the full earned basic
+    // before any deductions. Weekends/off-schedule days are already excluded.
+    const basicPay = dailyRate * scheduledWorkDays;
 
-    // Basic pay covers only days actually worked (absences already excluded from daysWorked)
-    const basicPay = dailyRate * daysWorked;
-
-    const absentDeduction    = 0; // already reflected in daysWorked
+    // ── Attendance Deductions ─────────────────────────────────────────────────
+    // Absences: missed scheduled work days with no approved leave (incl. unpaid leave)
+    const absentDeduction    = absentDays * dailyRate;
+    // Late: minutes from shift start to clock-in (measured after grace period triggers)
     const lateDeduction      = lateMinutes * minuteRate;
+    // Undertime: minutes left before shift end when clocked out early
     const undertimeDeduction = undertimeMinutes * minuteRate;
 
-    // OT and special pay premiums (PH Labor Code)
-    const overtimePay       = overtimeHours * hourlyRate * 1.25;      // +25%
-    const regularHolidayPay = regularHolidayHours * hourlyRate * 2.0; // 200%
-    const specialHolidayPay = specialHolidayHours * hourlyRate * 1.3; // 130%
-    const nightDiffPay      = nightDiffHours * hourlyRate * 0.10;     // +10% night diff premium
-    const restDayPay        = restDayHours * hourlyRate * 1.3;        // 130%
+    // ── OT & Holiday Premiums (PH Labor Code) ────────────────────────────────
+    // Regular OT: additional 25% of hourly rate per OT hour
+    const overtimePay       = overtimeHours * hourlyRate * 0.25;
+    // Regular Holiday: employee is already paid via basicPay (dailyRate × scheduledWorkDays
+    // which includes the holiday). Working on a regular holiday earns an additional 100% premium.
+    const regularHolidayPay = regularHolidayHours * hourlyRate * 1.0;
+    // Special Holiday: +30% premium on top of normal daily pay for hours worked
+    const specialHolidayPay = specialHolidayHours * hourlyRate * 0.30;
+    // Night Differential: +10% for hours worked between 22:00–06:00
+    const nightDiffPay      = nightDiffHours * hourlyRate * 0.10;
+    // Rest Day: +30% premium for working on scheduled day off
+    const restDayPay        = restDayHours * hourlyRate * 0.30;
 
     const thirteenthMonthAccrued = monthlyBasic / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
 
-    const grossPay = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
-        + nightDiffPay + restDayPay + allowance + otherBenefits + totalDeMinimis;
+    // ── Gross Pay ─────────────────────────────────────────────────────────────
+    // Basic (fixed) + OT/Holiday premiums − Tardiness − Absences + Allowances + Benefits
+    const grossPay = basicPay
+        + overtimePay + regularHolidayPay + specialHolidayPay + nightDiffPay + restDayPay
+        - absentDeduction - lateDeduction - undertimeDeduction
+        + allowance + otherBenefits + totalDeMinimis;
 
-    // Contributions are based on full monthly basic salary (BIR / SSS / PhilHealth / Pag-IBIG rules)
+    // ── Contributions (based on full monthly basic salary) ───────────────────
     const sssContribution        = await computeSSSContribution(monthlyBasic);
     const philhealthContribution = await computePhilHealthContribution(monthlyBasic);
     const pagibigContribution    = await computePagIBIGContribution(monthlyBasic);
     const totalContributions     = sssContribution + philhealthContribution + pagibigContribution;
 
-    // BIR annualized withholding tax method (RR 2-98 as amended by TRAIN Law)
-    // Step 1: monthly taxable compensation = monthly basic + taxable extras - monthly contributions
-    //   - De minimis exempt portion is non-taxable
-    //   - Other benefits and allowance are taxable compensation
-    const monthlyCompensation = monthlyBasic + (rawAllowance / 1) + (rawOtherBenefits / 1) + deMinimisExcess;
-    const monthlyTaxable      = Math.max(0, monthlyCompensation - totalContributions);
-    // Step 2: annualize and apply tax brackets
-    const annualTaxable = monthlyTaxable * 12;
-    const annualTax     = await computeWithholdingTax(annualTaxable);
-    // Step 3: prorate to pay period
+    // ── Withholding Tax — BIR Annualized Method (TRAIN Law) ──────────────────
+    // Allowance and otherBenefits are non-taxable by default per user policy.
+    // Taxable monthly compensation = basic salary + taxable de minimis excess − contributions.
+    const monthlyTaxableComp = Math.max(0, monthlyBasic + deMinimisExcess - totalContributions);
+    const annualTaxable      = monthlyTaxableComp * 12;
+    const annualTax          = await computeWithholdingTax(annualTaxable);
     const periodsPerMonth: Record<PayFrequency, number> = {
         monthly: 1, 'semi-monthly': 2, 'bi-weekly': 2.1667, weekly: 4.3333,
     };
     const withholdingTax = Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
 
-    const totalDeductions = totalContributions + withholdingTax
-        + absentDeduction + lateDeduction + undertimeDeduction;
+    // ── Net Pay ───────────────────────────────────────────────────────────────
+    // Gross already has attendance deductions subtracted; total deductions = contributions + tax
+    const totalDeductions = totalContributions + withholdingTax;
     const netPay = grossPay - totalDeductions;
 
     return {
@@ -3401,7 +3425,7 @@ export const computeEmployeePayroll = async (params: {
         philhealthContribution,
         pagibigContribution,
         totalContributions,
-        taxableIncome: monthlyTaxable,
+        taxableIncome: monthlyTaxableComp,
         withholdingTax,
         sssLoan: 0,
         pagibigLoan: 0,
@@ -3724,6 +3748,7 @@ export const generatePayrollForPeriod = async (
             companyId: emp.companyId,
             periodId: period.id,
             basicSalary: latestSalary.basicSalary,
+            scheduledWorkDays: attendance.scheduledWorkDays,
             daysWorked: attendance.daysWorked,
             hoursWorked: attendance.hoursWorked,
             absentDays: attendance.absentDays,
