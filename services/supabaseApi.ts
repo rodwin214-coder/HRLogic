@@ -3049,13 +3049,35 @@ export const analyzeAttendanceForPayroll = async (params: {
 }): Promise<AttendanceAnalysis> => {
     const { employeeId, periodStart, periodEnd, shift, workSchedule, gracePeriodMinutes, holidays } = params;
 
-    // Fetch all attendance records for this employee within the period
-    const { data: rawRecords } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .gte('clock_in_time', `${periodStart}T00:00:00`)
-        .lte('clock_in_time', `${periodEnd}T23:59:59`);
+    // Fetch attendance records and approved OT requests in parallel
+    const [{ data: rawRecords }, { data: rawRequests }] = await Promise.all([
+        supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .gte('clock_in_time', `${periodStart}T00:00:00`)
+            .lte('clock_in_time', `${periodEnd}T23:59:59`),
+        supabase
+            .from('requests')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .eq('request_type', 'Overtime')
+            .eq('status', 'Approved')
+            .gte('date', periodStart)
+            .lte('date', periodEnd),
+    ]);
+
+    // Approved OT requests keyed by date — hours and optional holiday type
+    const approvedOT: Record<string, { hours: number; holidayType?: string }> = {};
+    for (const r of (rawRequests ?? [])) {
+        const date = r.date as string;
+        const prev = approvedOT[date];
+        const hrs = parseFloat(r.hours ?? 0);
+        approvedOT[date] = {
+            hours: (prev?.hours ?? 0) + hrs,
+            holidayType: r.holiday_type ?? prev?.holidayType,
+        };
+    }
 
     const records: { date: string; clockInMin: number; clockOutMin: number | null }[] =
         (rawRecords ?? []).map((r: any) => {
@@ -3073,9 +3095,7 @@ export const analyzeAttendanceForPayroll = async (params: {
         if (!byDate[rec.date]) {
             byDate[rec.date] = { clockInMin: rec.clockInMin, clockOutMin: rec.clockOutMin };
         } else {
-            // Keep earliest clock-in
             if (rec.clockInMin < byDate[rec.date].clockInMin) byDate[rec.date].clockInMin = rec.clockInMin;
-            // Keep latest clock-out
             if (rec.clockOutMin !== null) {
                 if (byDate[rec.date].clockOutMin === null || rec.clockOutMin > byDate[rec.date].clockOutMin!) {
                     byDate[rec.date].clockOutMin = rec.clockOutMin;
@@ -3088,9 +3108,8 @@ export const analyzeAttendanceForPayroll = async (params: {
     for (const h of holidays) holidayMap[h.date] = h.type;
 
     const workDayNums = workingDayNumbers(workSchedule);
-    const shiftStartMin = shift ? timeToMinutes(shift.startTime) : 8 * 60;   // default 08:00
-    const shiftEndMin   = shift ? timeToMinutes(shift.endTime)   : 17 * 60;  // default 17:00
-    const shiftDurationMin = shiftEndMin - shiftStartMin;
+    const shiftStartMin = shift ? timeToMinutes(shift.startTime) : 8 * 60;
+    const shiftEndMin   = shift ? timeToMinutes(shift.endTime)   : 17 * 60;
 
     let daysWorked = 0;
     let hoursWorked = 0;
@@ -3111,43 +3130,32 @@ export const analyzeAttendanceForPayroll = async (params: {
         const attended = byDate[date];
 
         if (!attended) {
-            // No attendance record for this date
             if (isWorkDay && !holidayType) absentDays += 1;
-            // On holidays with no work, no absent deduction
             continue;
         }
 
         const { clockInMin, clockOutMin } = attended;
+        // Cap effective clock-out at shift end for normal day calculation;
+        // overtime beyond shift end is only credited if there is an approved OT request.
         const effectiveClockOut = clockOutMin ?? shiftEndMin;
+        const clockOutForRegular = Math.min(effectiveClockOut, shiftEndMin);
 
-        // Minutes actually worked (capped: we count from clock-in to clock-out)
-        const workedMin = Math.max(0, effectiveClockOut - clockInMin);
+        const workedMin = Math.max(0, clockOutForRegular - clockInMin);
         hoursWorked += workedMin / 60;
 
-        // Tardiness: late beyond grace period
+        // Tardiness
         const graceDeadline = shiftStartMin + gracePeriodMinutes;
         if (isWorkDay && clockInMin > graceDeadline) {
             lateMinutes += clockInMin - shiftStartMin;
         }
 
-        // Undertime: clocked out before shift end
+        // Undertime (only when clocked out before shift end with no approved OT)
         if (clockOutMin !== null && clockOutMin < shiftEndMin && isWorkDay) {
             undertimeMinutes += shiftEndMin - clockOutMin;
         }
 
-        // Overtime: worked beyond shift end
-        if (effectiveClockOut > shiftEndMin) {
-            const otMins = effectiveClockOut - shiftEndMin;
-            if (isRestDay) {
-                restDayHours += workedMin / 60; // full time on rest day counts as rest day pay
-            } else if (holidayType === 'Regular') {
-                regularHolidayHours += workedMin / 60;
-            } else if (holidayType === 'Special') {
-                specialHolidayHours += workedMin / 60;
-            } else {
-                overtimeHours += otMins / 60;
-            }
-        } else if (isRestDay) {
+        // Holiday / rest day classification uses regular worked hours
+        if (isRestDay) {
             restDayHours += workedMin / 60;
         } else if (holidayType === 'Regular') {
             regularHolidayHours += workedMin / 60;
@@ -3155,8 +3163,26 @@ export const analyzeAttendanceForPayroll = async (params: {
             specialHolidayHours += workedMin / 60;
         }
 
-        // Night differential: minutes worked between 22:00 and 06:00
-        nightDiffHours += nightDiffMinutesInRange(clockInMin, effectiveClockOut) / 60;
+        // Overtime — only from approved OT requests for this date
+        const otRequest = approvedOT[date];
+        if (otRequest) {
+            const approvedHours = otRequest.hours;
+            const reqHolidayType = otRequest.holidayType;
+            if (isRestDay) {
+                // Rest day OT — already counted above, no extra here
+            } else if (reqHolidayType === 'Regular') {
+                regularHolidayHours += approvedHours;
+            } else if (reqHolidayType === 'Special') {
+                specialHolidayHours += approvedHours;
+            } else {
+                overtimeHours += approvedHours;
+            }
+            // Add approved OT to total hours worked
+            hoursWorked += approvedHours;
+        }
+
+        // Night differential: minutes worked between 22:00–06:00 (shift portion only)
+        nightDiffHours += nightDiffMinutesInRange(clockInMin, clockOutForRegular) / 60;
 
         if (isWorkDay || holidayType || isRestDay) daysWorked += 1;
     }
