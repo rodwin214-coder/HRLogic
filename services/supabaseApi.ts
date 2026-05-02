@@ -46,6 +46,12 @@ const ensureUserContext = async () => {
             setting_value: currentUserEmail
         });
     }
+    if (currentCompanyId) {
+        await supabase.rpc('set_config', {
+            setting_name: 'app.current_company_id',
+            setting_value: currentCompanyId
+        });
+    }
 };
 
 const generateNextEmployeeId = async (companyId: string): Promise<string> => {
@@ -2962,7 +2968,7 @@ function dbRecordToPayrollRecord(r: any): PayrollRecord {
 
 // PH SSS contribution lookup
 export const computeSSSContribution = async (monthlyBasic: number): Promise<number> => {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
         .from('ph_sss_brackets')
         .select('employee_contribution')
         .lte('range_from', monthlyBasic)
@@ -2974,7 +2980,7 @@ export const computeSSSContribution = async (monthlyBasic: number): Promise<numb
 
 // PH PhilHealth contribution
 export const computePhilHealthContribution = async (monthlyBasic: number): Promise<number> => {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
         .from('ph_philhealth_config')
         .select('*')
         .order('effective_date', { ascending: false })
@@ -2989,7 +2995,7 @@ export const computePhilHealthContribution = async (monthlyBasic: number): Promi
 
 // PH Pag-IBIG contribution
 export const computePagIBIGContribution = async (monthlyBasic: number): Promise<number> => {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
         .from('ph_pagibig_config')
         .select('*')
         .order('effective_date', { ascending: false })
@@ -3004,7 +3010,7 @@ export const computePagIBIGContribution = async (monthlyBasic: number): Promise<
 
 // PH Withholding Tax (annualized method)
 export const computeWithholdingTax = async (annualTaxableIncome: number): Promise<number> => {
-    const { data } = await supabaseAdmin
+    const { data } = await supabase
         .from('ph_tax_table')
         .select('*')
         .lte('bracket_from', annualTaxableIncome)
@@ -3132,7 +3138,8 @@ export const computeEmployeePayroll = async (params: {
 export const getPayrollPeriods = async (): Promise<PayrollPeriod[]> => {
     try {
         await ensureUserContext();
-        const { data, error } = await supabaseAdmin
+        if (!currentCompanyId) { console.error('getPayrollPeriods: no company ID'); return []; }
+        const { data, error } = await supabase
             .from('payroll_periods')
             .select('*')
             .eq('company_id', currentCompanyId)
@@ -3152,42 +3159,41 @@ export const createPayrollPeriod = async (period: {
     periodEnd: string;
     payDate: string;
     notes?: string;
-}): Promise<PayrollPeriod | null> => {
-    try {
-        await ensureUserContext();
-        const { data, error } = await supabaseAdmin
-            .from('payroll_periods')
-            .insert([{
-                company_id: currentCompanyId,
-                period_name: period.periodName,
-                pay_frequency: period.payFrequency,
-                period_start: period.periodStart,
-                period_end: period.periodEnd,
-                pay_date: period.payDate,
-                notes: period.notes ?? '',
-                status: 'Draft',
-            }])
-            .select()
-            .single();
-        if (error) throw error;
-        return dbPeriodToPayrollPeriod(data);
-    } catch (err) {
-        console.error('createPayrollPeriod error:', err);
-        return null;
+}): Promise<PayrollPeriod | { error: string }> => {
+    await ensureUserContext();
+    if (!currentCompanyId) return { error: 'Company ID not set. Please log out and log back in.' };
+    const { data, error } = await supabase
+        .from('payroll_periods')
+        .insert([{
+            company_id: currentCompanyId,
+            period_name: period.periodName,
+            pay_frequency: period.payFrequency,
+            period_start: period.periodStart,
+            period_end: period.periodEnd,
+            pay_date: period.payDate,
+            notes: period.notes ?? '',
+            status: 'Draft',
+        }])
+        .select()
+        .single();
+    if (error) {
+        console.error('createPayrollPeriod error:', error);
+        return { error: error.message };
     }
+    return dbPeriodToPayrollPeriod(data);
 };
 
 export const updatePayrollPeriodStatus = async (periodId: string, status: PayrollStatus): Promise<void> => {
     try {
         await ensureUserContext();
-        const { error } = await supabaseAdmin
+        const { error } = await supabase
             .from('payroll_periods')
             .update({ status, updated_at: new Date().toISOString() })
             .eq('id', periodId)
             .eq('company_id', currentCompanyId);
         if (error) throw error;
         if (status === 'Paid') {
-            await supabaseAdmin
+            await supabase
                 .from('payroll_records')
                 .update({ status: 'Paid', updated_at: new Date().toISOString() })
                 .eq('period_id', periodId);
@@ -3200,9 +3206,9 @@ export const updatePayrollPeriodStatus = async (periodId: string, status: Payrol
 export const deletePayrollPeriod = async (periodId: string): Promise<void> => {
     try {
         await ensureUserContext();
-        await supabaseAdmin.from('payroll_adjustments').delete().eq('period_id', periodId);
-        await supabaseAdmin.from('payroll_records').delete().eq('period_id', periodId);
-        const { error } = await supabaseAdmin
+        await supabase.from('payroll_adjustments').delete().eq('period_id', periodId);
+        await supabase.from('payroll_records').delete().eq('period_id', periodId);
+        const { error } = await supabase
             .from('payroll_periods')
             .delete()
             .eq('id', periodId)
@@ -3216,7 +3222,8 @@ export const deletePayrollPeriod = async (periodId: string): Promise<void> => {
 export const getPayrollRecords = async (periodId: string): Promise<PayrollRecord[]> => {
     try {
         await ensureUserContext();
-        const { data, error } = await supabaseAdmin
+        if (!currentCompanyId) { console.error('getPayrollRecords: no company ID'); return []; }
+        const { data, error } = await supabase
             .from('payroll_records')
             .select('*')
             .eq('period_id', periodId)
@@ -3271,7 +3278,7 @@ export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Pr
             notes: record.notes,
             updated_at: new Date().toISOString(),
         };
-        const { data, error } = await supabaseAdmin
+        const { data, error } = await supabase
             .from('payroll_records')
             .upsert([row], { onConflict: 'period_id,employee_id' })
             .select()
@@ -3314,7 +3321,8 @@ export const generatePayrollForPeriod = async (
 export const getPayrollAdjustments = async (periodId: string): Promise<PayrollAdjustment[]> => {
     try {
         await ensureUserContext();
-        const { data, error } = await supabaseAdmin
+        if (!currentCompanyId) { console.error('getPayrollAdjustments: no company ID'); return []; }
+        const { data, error } = await supabase
             .from('payroll_adjustments')
             .select('*')
             .eq('period_id', periodId)
@@ -3345,7 +3353,8 @@ export const addPayrollAdjustment = async (adj: {
 }): Promise<void> => {
     try {
         await ensureUserContext();
-        const { error } = await supabaseAdmin
+        if (!currentCompanyId) throw new Error('Company ID not set');
+        const { error } = await supabase
             .from('payroll_adjustments')
             .insert([{
                 company_id: currentCompanyId,

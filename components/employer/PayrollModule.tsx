@@ -50,10 +50,13 @@ const CreatePeriodModal: React.FC<CreatePeriodModalProps> = ({ onClose, onSave }
             return;
         }
         setSaving(true);
-        const period = await createPayrollPeriod(form);
+        const result = await createPayrollPeriod(form);
         setSaving(false);
-        if (!period) { setError('Failed to create period.'); return; }
-        onSave(period);
+        if (!result || 'error' in result) {
+            setError((result as any)?.error ?? 'Failed to create period.');
+            return;
+        }
+        onSave(result);
     };
 
     return (
