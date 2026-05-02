@@ -156,10 +156,16 @@ ${r.thirteenthMonthAccrued > 0 ? `<div style="margin-top:10px;font-size:11px;col
 };
 
 const openPayslip = (html: string) => {
-    const win = window.open('', '_blank', 'width=700,height=900');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
 };
 
 // ─── Payroll Breakdown Modal ─────────────────────────────────────────────────
@@ -991,10 +997,7 @@ const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, per
 ${htmlBody}
 <div style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:center;">System-generated · ${company?.name ?? ''}</div>
 </body></html>`;
-        const win = window.open('', '_blank', 'width=900,height=800');
-        if (!win) return;
-        win.document.write(html);
-        win.document.close();
+        openPayslip(html);
     };
 
     const printPayrollRegister = () => {
@@ -1105,19 +1108,16 @@ ${htmlBody}
             const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
             return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency);
         });
-        // Open first payslip; for multiple, we'd need a combined view
         const combined = allHTML.map((h, i) =>
-            `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE.*?<body[^>]*>/s, '').replace('</body></html>', '')}</div>`
+            `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE[\s\S]*?<body[^>]*>/i, '').replace('</body></html>', '')}</div>`
         ).join('');
-        const win = window.open('', '_blank', 'width=750,height=900');
-        if (!win) return;
-        win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>All Payslips – ${period.periodName}</title>
+        const fullHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>All Payslips – ${period.periodName}</title>
 <style>body{font-family:Arial,sans-serif;color:#111;padding:20px;} @media print{.no-print{display:none!important;} @page{margin:15mm;}} table{width:100%;border-collapse:collapse;} th{background:#f3f4f6;font-size:10px;text-transform:uppercase;padding:5px 8px;} td{padding:4px 8px;font-size:11px;border-bottom:1px solid #f3f4f6;} .gross-box{background:#1d4ed8;color:white;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;margin:6px 0;} .net-box{background:#166534;color:white;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;margin-top:6px;} hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0;}</style></head>
 <body>
-<div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()" style="background:#1d4ed8;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-right:8px;">Print All</button><button onclick="window.close()" style="border:1px solid #d1d5db;padding:8px 20px;border-radius:6px;cursor:pointer;">Close</button></div>
+<div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()" style="background:#1d4ed8;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-right:8px;">Print All</button></div>
 ${combined}
-</body></html>`);
-        win.document.close();
+</body></html>`;
+        openPayslip(fullHTML);
     };
 
     const reportOptions = [
