@@ -24,6 +24,199 @@ const statusColor: Record<PayrollStatus, string> = {
     Paid: 'bg-green-100 text-green-800',
 };
 
+// ─── Payroll Breakdown Modal ─────────────────────────────────────────────────
+
+interface PayrollBreakdownModalProps {
+    record: PayrollRecord;
+    employeeName: string;
+    periodName: string;
+    payFrequency: PayFrequency;
+    onClose: () => void;
+}
+
+const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, periodName, payFrequency, onClose }) => {
+    const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
+    const dailyRate = r.basicSalary / 22;
+    const hourlyRate = dailyRate / 8;
+    const minuteRate = hourlyRate / 60;
+    const scheduledWorkDays = r.daysWorked + r.absentDays;
+
+    type Row = { label: string; formula: string; value: number; indent?: boolean; sub?: boolean; bold?: boolean; color?: string };
+
+    const earningsRows: Row[] = [
+        { label: 'Monthly Basic Salary', formula: `Given`, value: r.basicSalary, bold: true },
+        { label: 'Daily Rate', formula: `₱${r.basicSalary.toFixed(2)} ÷ 22 working days`, value: dailyRate, indent: true },
+        { label: 'Hourly Rate', formula: `${fmt(dailyRate)} ÷ 8 hrs`, value: hourlyRate, indent: true },
+        { label: 'Scheduled Work Days', formula: `Days worked (${r.daysWorked}) + Absent days (${r.absentDays})`, value: scheduledWorkDays, indent: true },
+        { label: 'Basic Pay', formula: `${fmt(dailyRate)} × ${scheduledWorkDays} sched days`, value: r.basicPay, bold: true, color: 'text-blue-700' },
+    ];
+
+    const premiumRows: Row[] = [];
+    if (r.overtimeHours > 0) {
+        premiumRows.push({ label: 'Overtime Pay (+25%)', formula: `${r.overtimeHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 25%`, value: r.overtimePay, color: 'text-blue-700' });
+    }
+    if (r.regularHolidayHours > 0) {
+        premiumRows.push({ label: 'Regular Holiday Premium (+100%)', formula: `${r.regularHolidayHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 100%`, value: r.regularHolidayPay, color: 'text-blue-700' });
+    }
+    if (r.specialHolidayHours > 0) {
+        premiumRows.push({ label: 'Special Holiday Premium (+30%)', formula: `${r.specialHolidayHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 30%`, value: r.specialHolidayPay, color: 'text-blue-700' });
+    }
+    if (r.nightDiffHours > 0) {
+        premiumRows.push({ label: 'Night Differential (+10%)', formula: `${r.nightDiffHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 10%`, value: r.nightDiffPay, color: 'text-blue-700' });
+    }
+    if (r.restDayHours > 0) {
+        premiumRows.push({ label: 'Rest Day Premium (+30%)', formula: `${r.restDayHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 30%`, value: r.restDayPay, color: 'text-blue-700' });
+    }
+
+    const deductionRows: Row[] = [];
+    if (r.absentDays > 0) {
+        deductionRows.push({ label: 'Absent Deduction', formula: `${r.absentDays} day(s) × ${fmt(dailyRate)}`, value: -r.absentDeduction, color: 'text-red-600' });
+    }
+    if (r.lateMinutes > 0) {
+        deductionRows.push({ label: 'Late Deduction', formula: `${r.lateMinutes} min × ${fmt(minuteRate)}/min`, value: -r.lateDeduction, color: 'text-red-600' });
+    }
+    if (r.undertimeMinutes > 0) {
+        deductionRows.push({ label: 'Undertime Deduction', formula: `${r.undertimeMinutes} min × ${fmt(minuteRate)}/min`, value: -r.undertimeDeduction, color: 'text-red-600' });
+    }
+
+    const benefitRows: Row[] = [];
+    if (r.allowance > 0) {
+        benefitRows.push({
+            label: 'Allowance',
+            formula: benefitDivisor > 1 ? `Monthly allowance ÷ ${benefitDivisor} (${payFrequency})` : 'Monthly allowance',
+            value: r.allowance, color: 'text-green-700',
+        });
+    }
+    if (r.deMinimis > 0) {
+        benefitRows.push({
+            label: 'Other Benefits / De Minimis',
+            formula: `Non-taxable benefits this period`,
+            value: r.deMinimis, color: 'text-green-700',
+        });
+    }
+
+    const grossCalc = r.basicPay
+        + (r.overtimePay + r.regularHolidayPay + r.specialHolidayPay + r.nightDiffPay + r.restDayPay)
+        - (r.absentDeduction + r.lateDeduction + r.undertimeDeduction)
+        + r.allowance + r.deMinimis;
+
+    const monthlyContrib = r.sssContribution * benefitDivisor + r.philhealthContribution * benefitDivisor + r.pagibigContribution * benefitDivisor;
+    const taxableIncome = r.taxableIncome;
+    const annualTaxable = taxableIncome * 12;
+
+    const contribRows: Row[] = [
+        { label: 'SSS Contribution', formula: benefitDivisor > 1 ? `Monthly SSS ÷ ${benefitDivisor}` : 'Based on monthly salary bracket', value: -r.sssContribution, color: 'text-red-600' },
+        { label: 'PhilHealth Contribution', formula: benefitDivisor > 1 ? `Monthly PhilHealth ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.philhealthContribution, color: 'text-red-600' },
+        { label: 'Pag-IBIG Contribution', formula: benefitDivisor > 1 ? `Monthly Pag-IBIG ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.pagibigContribution, color: 'text-red-600' },
+    ];
+
+    const taxRows: Row[] = [
+        { label: 'Monthly Basic Salary', formula: 'For tax computation base', value: r.basicSalary, indent: true },
+        { label: 'Less: Monthly Contributions', formula: `SSS + PhilHealth + Pag-IBIG`, value: -monthlyContrib, indent: true, color: 'text-red-600' },
+        { label: 'Monthly Taxable Income', formula: `${fmt(r.basicSalary)} − ${fmt(monthlyContrib)}`, value: taxableIncome, indent: true, bold: true },
+        { label: 'Annual Taxable Income', formula: `${fmt(taxableIncome)} × 12 months`, value: annualTaxable, indent: true },
+        { label: 'Annual Tax (TRAIN Law)', formula: annualTaxable <= 250000 ? 'Annual income ≤ ₱250,000 → ₱0' : 'Per BIR tax table (RR 8-2018)', value: r.withholdingTax * 12 * (payFrequency === 'semi-monthly' ? 2 : 1), indent: true },
+        { label: 'Withholding Tax (this period)', formula: `Annual tax ÷ 12 ÷ ${payFrequency === 'semi-monthly' ? 2 : 1} period(s)/mo`, value: -r.withholdingTax, bold: true, color: 'text-red-600' },
+    ];
+
+    const loanRows: Row[] = [];
+    if (r.sssLoan > 0) loanRows.push({ label: 'SSS Loan', formula: 'Loan deduction', value: -r.sssLoan, color: 'text-red-600' });
+    if (r.pagibigLoan > 0) loanRows.push({ label: 'Pag-IBIG Loan', formula: 'Loan deduction', value: -r.pagibigLoan, color: 'text-red-600' });
+    if (r.cashAdvance > 0) loanRows.push({ label: 'Cash Advance', formula: 'Cash advance repayment', value: -r.cashAdvance, color: 'text-red-600' });
+    if (r.otherDeductions > 0) loanRows.push({ label: 'Other Deductions', formula: 'Miscellaneous deductions', value: -r.otherDeductions, color: 'text-red-600' });
+
+    const Section: React.FC<{ title: string; accent: string; rows: Row[]; children?: React.ReactNode }> = ({ title, accent, rows, children }) => (
+        <div className={`rounded-xl border ${accent} overflow-hidden`}>
+            <div className={`px-4 py-2.5 ${accent.replace('border-', 'bg-').replace('-200', '-50')}`}>
+                <p className={`text-sm font-semibold ${accent.replace('border-', 'text-').replace('-200', '-900')}`}>{title}</p>
+            </div>
+            <div className="divide-y divide-gray-100">
+                {rows.map((row, i) => (
+                    <div key={i} className={`flex items-center justify-between px-4 py-2.5 ${row.indent ? 'pl-8 bg-gray-50/50' : ''}`}>
+                        <div className="flex-1 min-w-0 mr-4">
+                            <p className={`text-sm ${row.bold ? 'font-semibold text-gray-900' : 'text-gray-700'} ${row.indent ? 'text-xs' : ''}`}>{row.label}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5">{row.formula}</p>
+                        </div>
+                        <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${row.color ?? (row.value >= 0 ? 'text-gray-800' : 'text-red-600')}`}>
+                            {row.value < 0 ? `−${fmt(Math.abs(row.value))}` : fmt(row.value)}
+                        </p>
+                    </div>
+                ))}
+                {children}
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">Payroll Breakdown</h2>
+                        <p className="text-xs text-gray-500">{employeeName} · {periodName}</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-5 space-y-4">
+                    {/* Basic */}
+                    <Section title="Basic Pay" accent="border-blue-200" rows={earningsRows} />
+
+                    {/* Premiums */}
+                    {premiumRows.length > 0 && (
+                        <Section title="Overtime & Holiday Premiums" accent="border-sky-200" rows={premiumRows} />
+                    )}
+
+                    {/* Deductions */}
+                    {deductionRows.length > 0 && (
+                        <Section title="Attendance Deductions" accent="border-red-200" rows={deductionRows} />
+                    )}
+
+                    {/* Benefits */}
+                    {benefitRows.length > 0 && (
+                        <Section title="Allowances & Benefits" accent="border-green-200" rows={benefitRows} />
+                    )}
+
+                    {/* Gross Pay */}
+                    <div className="bg-blue-600 rounded-xl px-5 py-3 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs text-blue-200">Basic Pay + Premiums − Deductions + Benefits</p>
+                            <p className="text-sm font-bold text-white">Gross Pay</p>
+                        </div>
+                        <p className="text-2xl font-bold text-white tabular-nums">{fmt(grossCalc)}</p>
+                    </div>
+
+                    {/* Government Contributions */}
+                    <Section title="Government Contributions" accent="border-orange-200" rows={contribRows} />
+
+                    {/* Withholding Tax */}
+                    <Section title="Withholding Tax (BIR TRAIN Law)" accent="border-yellow-200" rows={taxRows} />
+
+                    {/* Loans / Other */}
+                    {loanRows.length > 0 && (
+                        <Section title="Loans & Other Deductions" accent="border-red-200" rows={loanRows} />
+                    )}
+
+                    {/* Net Pay */}
+                    <div className="bg-green-600 rounded-xl px-5 py-3 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs text-green-200">Gross Pay − Contributions − W/Tax − Loans</p>
+                            <p className="text-sm font-bold text-white">Net Pay</p>
+                        </div>
+                        <p className="text-2xl font-bold text-white tabular-nums">{fmt(r.netPay)}</p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+                    <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ─── Create Period Modal ────────────────────────────────────────────────────
 
 interface CreatePeriodModalProps {
@@ -580,6 +773,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
+    const [breakdownRecord, setBreakdownRecord] = useState<PayrollRecord | null>(null);
     const [showAdjModal, setShowAdjModal] = useState(false);
     const [tab, setTab] = useState<'records' | 'adjustments' | 'summary'>('records');
     const [search, setSearch] = useState('');
@@ -748,7 +942,15 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.philhealthContribution)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.pagibigContribution)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.withholdingTax)}</td>
-                                                <td className="px-3 py-3 font-bold text-green-700">{fmt(r.netPay)}</td>
+                                                <td className="px-3 py-3">
+                                                    <button
+                                                        onClick={() => setBreakdownRecord(r)}
+                                                        className="font-bold text-green-700 hover:text-green-900 hover:underline tabular-nums text-left transition-colors"
+                                                        title="Click to view computation breakdown"
+                                                    >
+                                                        {fmt(r.netPay)}
+                                                    </button>
+                                                </td>
                                                 <td className="px-3 py-3">
                                                     {canEdit && (
                                                         <button onClick={() => setEditRecord(r)}
@@ -868,6 +1070,15 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                 </div>
             )}
 
+            {breakdownRecord && (
+                <PayrollBreakdownModal
+                    record={breakdownRecord}
+                    employeeName={(() => { const e = empMap.get(breakdownRecord.employeeId); return e ? `${e.firstName} ${e.lastName}` : ''; })()}
+                    periodName={period.periodName}
+                    payFrequency={period.payFrequency}
+                    onClose={() => setBreakdownRecord(null)}
+                />
+            )}
             {editRecord && (
                 <EditRecordModal
                     record={editRecord}
