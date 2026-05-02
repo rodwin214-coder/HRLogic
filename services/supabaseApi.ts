@@ -3004,13 +3004,21 @@ function workingDayNumbers(schedule: WorkSchedule): number[] {
     return [0,1,2,3,4,5,6]; // MONDAY_TO_SUNDAY
 }
 
+// Format a Date as "YYYY-MM-DD" using local time (not UTC) to avoid timezone shift
+function localDateStr(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
 // Enumerate every calendar date in [start, end] inclusive as "YYYY-MM-DD"
 function dateRange(start: string, end: string): string[] {
     const dates: string[] = [];
     const cur = new Date(start + 'T00:00:00');
     const last = new Date(end + 'T00:00:00');
     while (cur <= last) {
-        dates.push(cur.toISOString().slice(0, 10));
+        dates.push(localDateStr(cur));
         cur.setDate(cur.getDate() + 1);
     }
     return dates;
@@ -3100,7 +3108,7 @@ export const analyzeAttendanceForPayroll = async (params: {
         (rawRecords ?? []).map((r: any) => {
             const cin = new Date(r.clock_in_time);
             const cout = r.clock_out_time ? new Date(r.clock_out_time) : null;
-            const dateKey = cin.toISOString().slice(0, 10);
+            const dateKey = localDateStr(cin); // use local date to avoid UTC timezone shift
             const cinMin = cin.getHours() * 60 + cin.getMinutes();
             const coutMin = cout ? cout.getHours() * 60 + cout.getMinutes() : null;
             return { date: dateKey, clockInMin: cinMin, clockOutMin: coutMin };
