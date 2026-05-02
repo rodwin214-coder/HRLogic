@@ -53,7 +53,7 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
 
     const premiumRows: Row[] = [];
     if (r.overtimeHours > 0) {
-        premiumRows.push({ label: 'Overtime Pay (+25%)', formula: `${r.overtimeHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 25%`, value: r.overtimePay, color: 'text-blue-700' });
+        premiumRows.push({ label: 'Overtime Pay (125%)', formula: `${r.overtimeHours.toFixed(2)} OT hrs × ${fmt(hourlyRate)} × 125%`, value: r.overtimePay, color: 'text-blue-700' });
     }
     if (r.regularHolidayHours > 0) {
         premiumRows.push({ label: 'Regular Holiday Premium (+100%)', formula: `${r.regularHolidayHours.toFixed(2)} hrs × ${fmt(hourlyRate)} × 100%`, value: r.regularHolidayPay, color: 'text-blue-700' });
@@ -472,11 +472,11 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                     <div className="border border-blue-100 rounded-xl overflow-hidden">
                         <div className="bg-blue-50 px-4 py-2.5">
                             <h3 className="text-sm font-semibold text-blue-900">Special Hours & Premium Pay</h3>
-                            <p className="text-xs text-blue-500 mt-0.5">OT +25% · Regular holiday +100% premium · Special holiday +30% premium · Night diff +10% · Rest day +30%</p>
+                            <p className="text-xs text-blue-500 mt-0.5">OT 125% · Regular holiday +100% premium · Special holiday +30% premium · Night diff +10% · Rest day +30%</p>
                         </div>
                         <div className="p-4 grid grid-cols-3 gap-3">
                             {field('OT Hours', 'overtimeHours')}
-                            {field('OT Pay (+25%)', 'overtimePay', true)}
+                            {field('OT Pay (125%)', 'overtimePay', true)}
                             <div />
                             {field('Regular Holiday Hrs', 'regularHolidayHours')}
                             {field('Regular Holiday Pay (+100%)', 'regularHolidayPay', true)}

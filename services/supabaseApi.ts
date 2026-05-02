@@ -3356,8 +3356,9 @@ export const computeEmployeePayroll = async (params: {
     const undertimeDeduction = undertimeMinutes * minuteRate;
 
     // ── OT & Holiday Premiums (PH Labor Code) ────────────────────────────────
-    // Regular OT: additional 25% of hourly rate per OT hour
-    const overtimePay       = overtimeHours * hourlyRate * 0.25;
+    // Regular OT: 125% of hourly rate per OT hour (PH Labor Code Art. 87)
+    // OT hours are beyond the regular shift, so basicPay does NOT already include them.
+    const overtimePay       = overtimeHours * hourlyRate * 1.25;
     // Regular Holiday: employee is already paid via basicPay (dailyRate × scheduledWorkDays
     // which includes the holiday). Working on a regular holiday earns an additional 100% premium.
     const regularHolidayPay = regularHolidayHours * hourlyRate * 1.0;
