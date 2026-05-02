@@ -3342,6 +3342,7 @@ export const computeEmployeePayroll = async (params: {
     workSchedule?: WorkSchedule;
     employerShouldersContributions?: boolean;
     hourlyRateOverride?: number | null;
+    shiftHours?: number;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3357,6 +3358,7 @@ export const computeEmployeePayroll = async (params: {
         workSchedule = WorkSchedule.MONDAY_TO_FRIDAY,
         employerShouldersContributions = false,
         hourlyRateOverride = null,
+        shiftHours = 8,
     } = params;
 
     // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
@@ -3368,8 +3370,8 @@ export const computeEmployeePayroll = async (params: {
     // Daily rate per DOLE formula: monthly × 12 ÷ 52 ÷ working days per week
     const workDaysPerWeek = workingDayNumbers(workSchedule).length;
     const dailyRate    = (monthlyBasic * 12) / 52 / workDaysPerWeek;
-    // Use manual override if set, otherwise derive from daily rate
-    const hourlyRate   = hourlyRateOverride != null ? hourlyRateOverride : dailyRate / 8;
+    // Use manual override if set; otherwise divide daily rate by actual shift hours (8 for full-time, shift duration for part-time)
+    const hourlyRate   = hourlyRateOverride != null ? hourlyRateOverride : dailyRate / shiftHours;
     const minuteRate   = hourlyRate / 60;
 
     // ── Basic Pay (fixed for the period) ─────────────────────────────────────
@@ -3778,11 +3780,18 @@ export const generatePayrollForPeriod = async (
     const results: PayrollRecord[] = [];
     for (const emp of employees) {
         if (emp.status !== 'Active') continue;
+        // Skip employees not yet hired as of the period end date
+        if (emp.dateHired && emp.dateHired > period.periodEnd) continue;
         const latestSalary = emp.salaryHistory?.[0];
         if (!latestSalary) continue;
 
         const shift = shifts.find(s => s.id === emp.shiftId) ?? null;
         const empSchedule = emp.workSchedule ?? companyWorkSchedule;
+
+        // For part-time employees, derive shift hours from their assigned shift instead of assuming 8h
+        const shiftHours = (emp.employmentType === EmploymentType.PART_TIME && shift)
+            ? (timeToMinutes(shift.endTime) - timeToMinutes(shift.startTime)) / 60
+            : 8;
 
         const attendance = await analyzeAttendanceForPayroll({
             employeeId: emp.id,
@@ -3816,6 +3825,7 @@ export const generatePayrollForPeriod = async (
             workSchedule: empSchedule,
             employerShouldersContributions,
             hourlyRateOverride: latestSalary.hourlyRate ?? null,
+            shiftHours,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);
