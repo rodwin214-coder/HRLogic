@@ -3370,16 +3370,21 @@ export const computeEmployeePayroll = async (params: {
         - absentDeduction - lateDeduction - undertimeDeduction
         + allowance + otherBenefits + totalDeMinimis;
 
-    // ── Contributions (based on full monthly basic salary) ───────────────────
-    const sssContribution        = await computeSSSContribution(monthlyBasic);
-    const philhealthContribution = await computePhilHealthContribution(monthlyBasic);
-    const pagibigContribution    = await computePagIBIGContribution(monthlyBasic);
+    // ── Contributions (based on full monthly basic salary, split per period) ──
+    const monthlySss        = await computeSSSContribution(monthlyBasic);
+    const monthlyPhilhealth = await computePhilHealthContribution(monthlyBasic);
+    const monthlyPagibig    = await computePagIBIGContribution(monthlyBasic);
+    // For semi-monthly, each period carries half the monthly contribution
+    const sssContribution        = monthlySss        / benefitDivisor;
+    const philhealthContribution = monthlyPhilhealth / benefitDivisor;
+    const pagibigContribution    = monthlyPagibig    / benefitDivisor;
     const totalContributions     = sssContribution + philhealthContribution + pagibigContribution;
 
     // ── Withholding Tax — BIR Annualized Method (TRAIN Law) ──────────────────
     // Allowance and otherBenefits are non-taxable by default per user policy.
-    // Taxable monthly compensation = basic salary + taxable de minimis excess − contributions.
-    const monthlyTaxableComp = Math.max(0, monthlyBasic + deMinimisExcess - totalContributions);
+    // Taxable monthly compensation = basic salary + taxable de minimis excess − monthly contributions.
+    const monthlyTotalContributions = monthlySss + monthlyPhilhealth + monthlyPagibig;
+    const monthlyTaxableComp = Math.max(0, monthlyBasic + deMinimisExcess - monthlyTotalContributions);
     const annualTaxable      = monthlyTaxableComp * 12;
     const annualTax          = await computeWithholdingTax(annualTaxable);
     const periodsPerMonth: Record<PayFrequency, number> = {
