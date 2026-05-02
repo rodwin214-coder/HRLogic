@@ -163,6 +163,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             companyId: form.companyId,
             periodId: form.periodId,
             basicSalary: form.basicSalary,
+            scheduledWorkDays: form.daysWorked + form.absentDays,
             daysWorked: form.daysWorked,
             hoursWorked: form.hoursWorked,
             absentDays: form.absentDays,
@@ -174,6 +175,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             nightDiffHours: form.nightDiffHours,
             restDayHours: form.restDayHours,
             allowance: form.allowance,
+            otherBenefits: (form as any).otherBenefits ?? 0,
             deMinimisExempt: totalExempt,
             deMinimisExcess: totalExcess,
             payFrequency: period.payFrequency,
@@ -277,25 +279,36 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                     <div className="border border-blue-100 rounded-xl overflow-hidden">
                         <div className="bg-blue-50 px-4 py-2.5">
                             <h3 className="text-sm font-semibold text-blue-900">Special Hours & Premium Pay</h3>
-                            <p className="text-xs text-blue-500 mt-0.5">OT 125% · Regular holiday 200% · Special holiday 130% · Night diff +10% · Rest day 130%</p>
+                            <p className="text-xs text-blue-500 mt-0.5">OT +25% · Regular holiday +100% premium · Special holiday +30% premium · Night diff +10% · Rest day +30%</p>
                         </div>
                         <div className="p-4 grid grid-cols-3 gap-3">
                             {field('OT Hours', 'overtimeHours')}
-                            {field('OT Pay', 'overtimePay', true)}
+                            {field('OT Pay (+25%)', 'overtimePay', true)}
                             <div />
                             {field('Regular Holiday Hrs', 'regularHolidayHours')}
-                            {field('Regular Holiday Pay', 'regularHolidayPay', true)}
+                            {field('Regular Holiday Pay (+100%)', 'regularHolidayPay', true)}
                             <div />
                             {field('Special Holiday Hrs', 'specialHolidayHours')}
-                            {field('Special Holiday Pay', 'specialHolidayPay', true)}
+                            {field('Special Holiday Pay (+30%)', 'specialHolidayPay', true)}
                             <div />
                             {field('Night Diff Hours', 'nightDiffHours')}
-                            {field('Night Diff Pay', 'nightDiffPay', true)}
+                            {field('Night Diff Pay (+10%)', 'nightDiffPay', true)}
                             <div />
                             {field('Rest Day Hours', 'restDayHours')}
-                            {field('Rest Day Pay', 'restDayPay', true)}
+                            {field('Rest Day Pay (+30%)', 'restDayPay', true)}
                             <div />
-                            {field('Allowance', 'allowance')}
+                        </div>
+                    </div>
+
+                    {/* Allowances & Benefits */}
+                    <div className="border border-green-100 rounded-xl overflow-hidden">
+                        <div className="bg-green-50 px-4 py-2.5">
+                            <h3 className="text-sm font-semibold text-green-900">Allowances & Other Benefits</h3>
+                            <p className="text-xs text-green-600 mt-0.5">Non-taxable by default · Semi-monthly: half per period</p>
+                        </div>
+                        <div className="p-4 grid grid-cols-2 gap-3">
+                            {field('Allowance (this period)', 'allowance')}
+                            {field('Other Benefits (this period)', 'deMinimis')}
                         </div>
                     </div>
 
@@ -392,11 +405,26 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                                 {computing ? 'Computing…' : '↻ Recompute'}
                             </button>
                         </div>
-                        <div className="grid grid-cols-4 gap-3">
-                            {field('Basic Pay', 'basicPay', true)}
-                            {field('Hours Worked', 'hoursWorked', true)}
-                            {field('De Minimis Total', 'deMinimis', true)}
-                            {field('Gross Pay', 'grossPay', true)}
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-3 gap-3">
+                                {field('Basic Pay (fixed)', 'basicPay', true)}
+                                {field('OT + Holiday Pay', 'overtimePay', true)}
+                                {field('Night Diff + Rest Day', 'nightDiffPay', true)}
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                {field('Absent Deduction', 'absentDeduction', true)}
+                                {field('Late Deduction', 'lateDeduction', true)}
+                                {field('Undertime Deduction', 'undertimeDeduction', true)}
+                            </div>
+                            <div className="grid grid-cols-4 gap-3">
+                                {field('Allowance', 'allowance', true)}
+                                {field('Other Benefits', 'deMinimis', true)}
+                                {field('Hours Worked', 'hoursWorked', true)}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                                    <p className="text-xs font-medium text-blue-700">Gross Pay</p>
+                                    <p className="text-lg font-bold text-blue-800">{fmt(form.grossPay)}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -691,7 +719,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        {['Employee', 'Days', 'Basic Pay', 'OT Pay', 'Allowance', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
+                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -699,6 +727,8 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredRecords.map(r => {
                                         const emp = empMap.get(r.employeeId);
+                                        const holidayPay = r.regularHolidayPay + r.specialHolidayPay + r.restDayPay + r.nightDiffPay;
+                                        const tardiness = r.lateDeduction + r.undertimeDeduction;
                                         return (
                                             <tr key={r.id} className="hover:bg-gray-50">
                                                 <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
@@ -707,8 +737,12 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 </td>
                                                 <td className="px-3 py-3 text-gray-600">{r.daysWorked}</td>
                                                 <td className="px-3 py-3 text-gray-700">{fmt(r.basicPay)}</td>
-                                                <td className="px-3 py-3 text-gray-700">{fmt(r.overtimePay)}</td>
-                                                <td className="px-3 py-3 text-gray-700">{fmt(r.allowance)}</td>
+                                                <td className="px-3 py-3 text-blue-700">{holidayPay > 0 ? fmt(holidayPay) : '—'}</td>
+                                                <td className="px-3 py-3 text-blue-700">{r.overtimePay > 0 ? fmt(r.overtimePay) : '—'}</td>
+                                                <td className="px-3 py-3 text-red-600">{r.absentDeduction > 0 ? `-${fmt(r.absentDeduction)}` : '—'}</td>
+                                                <td className="px-3 py-3 text-red-600">{tardiness > 0 ? `-${fmt(tardiness)}` : '—'}</td>
+                                                <td className="px-3 py-3 text-green-700">{r.allowance > 0 ? fmt(r.allowance) : '—'}</td>
+                                                <td className="px-3 py-3 text-green-700">{r.deMinimis > 0 ? fmt(r.deMinimis) : '—'}</td>
                                                 <td className="px-3 py-3 font-medium text-gray-900">{fmt(r.grossPay)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.sssContribution)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.philhealthContribution)}</td>
@@ -730,8 +764,12 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         <td className="px-3 py-3 text-gray-900">TOTAL</td>
                                         <td></td>
                                         <td className="px-3 py-3">{fmt(records.reduce((s, r) => s + r.basicPay, 0))}</td>
+                                        <td className="px-3 py-3">{fmt(records.reduce((s, r) => s + r.regularHolidayPay + r.specialHolidayPay + r.restDayPay + r.nightDiffPay, 0))}</td>
                                         <td className="px-3 py-3">{fmt(records.reduce((s, r) => s + r.overtimePay, 0))}</td>
-                                        <td className="px-3 py-3">{fmt(records.reduce((s, r) => s + r.allowance, 0))}</td>
+                                        <td className="px-3 py-3 text-red-700">-{fmt(records.reduce((s, r) => s + r.absentDeduction, 0))}</td>
+                                        <td className="px-3 py-3 text-red-700">-{fmt(records.reduce((s, r) => s + r.lateDeduction + r.undertimeDeduction, 0))}</td>
+                                        <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.allowance, 0))}</td>
+                                        <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.deMinimis, 0))}</td>
                                         <td className="px-3 py-3">{fmt(totalGross)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalSSS)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalPH)}</td>
