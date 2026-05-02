@@ -74,6 +74,7 @@ export interface SalaryHistoryRecord {
     basicSalary: number;
     allowance: number;
     otherBenefits: number;
+    hourlyRate?: number | null; // null = auto-computed from basicSalary
 }
 
 export enum CustomFieldType {

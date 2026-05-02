@@ -401,6 +401,7 @@ const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> =
             basicSalary: parseFloat(s.basic_salary),
             allowance: parseFloat(s.allowance || 0),
             otherBenefits: parseFloat(s.other_benefits || 0),
+            hourlyRate: s.hourly_rate != null ? parseFloat(s.hourly_rate) : null,
         })),
         shiftId: dbEmployee.shift_id || '',
         workSchedule: dbEmployee.work_schedule,
@@ -520,6 +521,7 @@ export const getEmployees = async (): Promise<Employee[]> => {
                     basicSalary: parseFloat(s.basic_salary),
                     allowance: parseFloat(s.allowance || 0),
                     otherBenefits: parseFloat(s.other_benefits || 0),
+                    hourlyRate: s.hourly_rate != null ? parseFloat(s.hourly_rate) : null,
                 })),
                 shiftId: dbEmployee.shift_id || '',
                 workSchedule: dbEmployee.work_schedule,
@@ -749,7 +751,8 @@ export const addSalaryRecord = async (
     effectiveDate: string,
     basicSalary: number,
     allowance: number,
-    otherBenefits: number
+    otherBenefits: number,
+    hourlyRate?: number | null
 ): Promise<void> => {
     try {
         await ensureUserContext();
@@ -765,6 +768,7 @@ export const addSalaryRecord = async (
                 basic_salary: basicSalary,
                 allowance: allowance,
                 other_benefits: otherBenefits,
+                hourly_rate: hourlyRate ?? null,
             });
 
         if (error) throw error;
@@ -779,7 +783,8 @@ export const updateSalaryRecord = async (
     effectiveDate: string,
     basicSalary: number,
     allowance: number,
-    otherBenefits: number
+    otherBenefits: number,
+    hourlyRate?: number | null
 ): Promise<void> => {
     try {
         await ensureUserContext();
@@ -794,6 +799,7 @@ export const updateSalaryRecord = async (
                 basic_salary: basicSalary,
                 allowance: allowance,
                 other_benefits: otherBenefits,
+                hourly_rate: hourlyRate ?? null,
             })
             .eq('id', salaryRecordId);
 
@@ -3335,6 +3341,7 @@ export const computeEmployeePayroll = async (params: {
     payFrequency: PayFrequency;
     workSchedule?: WorkSchedule;
     employerShouldersContributions?: boolean;
+    hourlyRateOverride?: number | null;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3349,6 +3356,7 @@ export const computeEmployeePayroll = async (params: {
         payFrequency,
         workSchedule = WorkSchedule.MONDAY_TO_FRIDAY,
         employerShouldersContributions = false,
+        hourlyRateOverride = null,
     } = params;
 
     // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
@@ -3360,7 +3368,8 @@ export const computeEmployeePayroll = async (params: {
     // Daily rate per DOLE formula: monthly × 12 ÷ 52 ÷ working days per week
     const workDaysPerWeek = workingDayNumbers(workSchedule).length;
     const dailyRate    = (monthlyBasic * 12) / 52 / workDaysPerWeek;
-    const hourlyRate   = dailyRate / 8;
+    // Use manual override if set, otherwise derive from daily rate
+    const hourlyRate   = hourlyRateOverride != null ? hourlyRateOverride : dailyRate / 8;
     const minuteRate   = hourlyRate / 60;
 
     // ── Basic Pay (fixed for the period) ─────────────────────────────────────
@@ -3806,6 +3815,7 @@ export const generatePayrollForPeriod = async (
             payFrequency: period.payFrequency,
             workSchedule: empSchedule,
             employerShouldersContributions,
+            hourlyRateOverride: latestSalary.hourlyRate ?? null,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);

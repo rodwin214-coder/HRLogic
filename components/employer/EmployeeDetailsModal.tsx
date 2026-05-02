@@ -358,6 +358,7 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
         basicSalary: employee.salaryHistory[employee.salaryHistory.length - 1]?.basicSalary || 0,
         allowance: employee.salaryHistory[employee.salaryHistory.length - 1]?.allowance || 0,
         otherBenefits: employee.salaryHistory[employee.salaryHistory.length - 1]?.otherBenefits || 0,
+        hourlyRate: employee.salaryHistory[employee.salaryHistory.length - 1]?.hourlyRate ?? null,
     };
     const [newRecord, setNewRecord] = useState<Omit<SalaryHistoryRecord, 'id'>>(initialNewRecordState);
     const [editRecord, setEditRecord] = useState<SalaryHistoryRecord | null>(null);
@@ -371,7 +372,8 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                 newRecord.effectiveDate,
                 newRecord.basicSalary,
                 newRecord.allowance,
-                newRecord.otherBenefits
+                newRecord.otherBenefits,
+                (newRecord as any).hourlyRate ?? null
             );
             await onUpdate();
             setIsAdding(false);
@@ -391,7 +393,8 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                 editRecord.effectiveDate,
                 editRecord.basicSalary,
                 editRecord.allowance,
-                editRecord.otherBenefits
+                editRecord.otherBenefits,
+                editRecord.hourlyRate ?? null
             );
             await onUpdate();
             setEditingRecordId(null);
@@ -442,7 +445,7 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
             
             {isAdding && (
                 <div className="p-4 bg-slate-50 border rounded-lg space-y-3 animate-fade-in">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label className="text-xs font-medium text-slate-700 block">Effective Date</label>
                             <input type="date" value={newRecord.effectiveDate} onChange={e => setNewRecord({...newRecord, effectiveDate: e.target.value})} className="input-field text-sm mt-1"/>
@@ -455,12 +458,24 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                             <label className="text-xs font-medium text-slate-700 block">Allowance</label>
                             <input type="number" value={newRecord.allowance} onChange={e => setNewRecord({...newRecord, allowance: Number(e.target.value)})} className="input-field text-sm mt-1"/>
                         </div>
-                         <div>
+                        <div>
                             <label className="text-xs font-medium text-slate-700 block">Other Benefits</label>
                             <input type="number" value={newRecord.otherBenefits} onChange={e => setNewRecord({...newRecord, otherBenefits: Number(e.target.value)})} className="input-field text-sm mt-1"/>
                         </div>
+                        <div>
+                            <label className="text-xs font-medium text-slate-700 block">Hourly Rate Override</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Auto-computed"
+                                value={(newRecord as any).hourlyRate ?? ''}
+                                onChange={e => setNewRecord({...newRecord, hourlyRate: e.target.value === '' ? null : Number(e.target.value)} as any)}
+                                className="input-field text-sm mt-1"
+                            />
+                            <p className="text-xs text-slate-400 mt-0.5">Leave blank to use DOLE formula</p>
+                        </div>
                     </div>
-                     <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2">
                         <button onClick={() => setIsAdding(false)} className="btn btn-secondary text-sm">Cancel</button>
                         <button onClick={handleAddRecord} className="btn btn-primary text-sm">Save Record</button>
                     </div>
@@ -475,6 +490,7 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Basic Salary</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Allowance</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Other Benefits</th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Hourly Rate</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                             <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
@@ -532,6 +548,22 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                                             />
                                         ) : (
                                             record.otherBenefits.toLocaleString()
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                                        {isEditing && editRecord ? (
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Auto"
+                                                value={editRecord.hourlyRate ?? ''}
+                                                onChange={e => setEditRecord({ ...editRecord, hourlyRate: e.target.value === '' ? null : Number(e.target.value) })}
+                                                className="input-field text-sm w-full text-right"
+                                            />
+                                        ) : record.hourlyRate != null ? (
+                                            <span className="font-medium text-blue-700">{record.hourlyRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        ) : (
+                                            <span className="text-gray-400 italic text-xs">Auto</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold text-right">
