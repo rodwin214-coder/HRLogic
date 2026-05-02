@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     PayrollPeriod, PayrollRecord, PayrollAdjustment, PayFrequency,
     PayrollStatus, AdjustmentType, Employee, DeMinimisItem, DeMinimisType,
-    Shift, Holiday, WorkSchedule,
+    Shift, Holiday, WorkSchedule, CompanyProfile,
 } from '../../types';
 import {
     getPayrollPeriods, createPayrollPeriod, updatePayrollPeriodStatus, deletePayrollPeriod,
@@ -24,17 +24,159 @@ const statusColor: Record<PayrollStatus, string> = {
     Paid: 'bg-green-100 text-green-800',
 };
 
+// ─── Payslip PDF Generator ───────────────────────────────────────────────────
+
+const generatePayslipHTML = (
+    r: PayrollRecord,
+    employeeName: string,
+    employeeId: string,
+    department: string,
+    periodName: string,
+    payDate: string,
+    company: CompanyProfile | null,
+    payFrequency: PayFrequency,
+): string => {
+    const f = (n: number) => '₱' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
+    const logoHTML = company?.logo
+        ? `<img src="${company.logo}" style="height:56px;object-fit:contain;" />`
+        : `<div style="width:56px;height:56px;background:#1e40af;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:20px;">${(company?.name ?? 'C')[0]}</div>`;
+
+    const row = (label: string, value: string, color = '#374151', bold = false) =>
+        `<tr><td style="padding:4px 8px;font-size:12px;color:#6b7280;">${label}</td><td style="padding:4px 8px;font-size:12px;color:${color};font-weight:${bold ? '600' : '400'};text-align:right;">${value}</td></tr>`;
+
+    const holidayPay = r.regularHolidayPay + r.specialHolidayPay + r.restDayPay + r.nightDiffPay;
+    const tardiness = r.lateDeduction + r.undertimeDeduction;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Payslip – ${employeeName}</title>
+<style>
+  body { font-family: Arial, sans-serif; color: #111; margin: 0; padding: 20px; background: #fff; }
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none !important; }
+    @page { margin: 15mm; }
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f3f4f6; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 6px 8px; text-align: left; color: #374151; }
+  .divider { border: none; border-top: 1px solid #e5e7eb; margin: 10px 0; }
+  .net-box { background: #166534; color: white; border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  .gross-box { background: #1d4ed8; color: white; border-radius: 8px; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="no-print" style="text-align:center;margin-bottom:16px;">
+  <button onclick="window.print()" style="background:#1d4ed8;color:white;border:none;padding:10px 24px;border-radius:6px;font-size:14px;cursor:pointer;margin-right:8px;">Print / Save as PDF</button>
+  <button onclick="window.close()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:10px 24px;border-radius:6px;font-size:14px;cursor:pointer;">Close</button>
+</div>
+
+<!-- Header -->
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:2px solid #e5e7eb;">
+  ${logoHTML}
+  <div style="flex:1;">
+    <div style="font-size:18px;font-weight:700;color:#111;">${company?.name ?? 'Company'}</div>
+    <div style="font-size:11px;color:#6b7280;">${company?.address ?? ''}</div>
+    <div style="font-size:11px;color:#6b7280;">${company?.email ?? ''}${company?.contactNumber ? ' · ' + company.contactNumber : ''}</div>
+  </div>
+  <div style="text-align:right;">
+    <div style="font-size:16px;font-weight:700;color:#1d4ed8;">PAYSLIP</div>
+    <div style="font-size:11px;color:#6b7280;">${periodName}</div>
+    <div style="font-size:11px;color:#6b7280;">Pay Date: ${payDate}</div>
+  </div>
+</div>
+
+<!-- Employee Info -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;background:#f9fafb;padding:12px;border-radius:8px;">
+  <div><span style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">Employee</span><div style="font-size:14px;font-weight:600;color:#111;">${employeeName}</div></div>
+  <div><span style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">Employee ID</span><div style="font-size:13px;color:#374151;">${employeeId}</div></div>
+  <div><span style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">Department</span><div style="font-size:13px;color:#374151;">${department || '—'}</div></div>
+  <div><span style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;">Pay Frequency</span><div style="font-size:13px;color:#374151;">${payFrequency}</div></div>
+</div>
+
+<!-- Earnings -->
+<table>
+  <tr><th colspan="2">Earnings</th></tr>
+  ${row('Basic Pay', f(r.basicPay))}
+  ${r.overtimePay > 0 ? row('Overtime Pay (125%)', f(r.overtimePay), '#1d4ed8') : ''}
+  ${holidayPay > 0 ? row('Holiday / Rest Day Pay', f(holidayPay), '#1d4ed8') : ''}
+  ${r.allowance > 0 ? row(`Allowance${benefitDivisor > 1 ? ' (÷2)' : ''}`, f(r.allowance), '#15803d') : ''}
+  ${r.otherBenefits > 0 ? row(`Other Benefits${benefitDivisor > 1 ? ' (÷2)' : ''}`, f(r.otherBenefits), '#15803d') : ''}
+  ${r.deMinimis > 0 ? row('De Minimis Benefits', f(r.deMinimis), '#15803d') : ''}
+</table>
+<hr class="divider"/>
+
+<!-- Deductions from attendance -->
+<table>
+  <tr><th colspan="2">Attendance Deductions</th></tr>
+  ${r.absentDeduction > 0 ? row(`Absences (${r.absentDays} day${r.absentDays !== 1 ? 's' : ''})`, '-' + f(r.absentDeduction), '#dc2626') : ''}
+  ${tardiness > 0 ? row('Late / Undertime', '-' + f(tardiness), '#dc2626') : ''}
+  ${r.absentDeduction === 0 && tardiness === 0 ? row('No deductions', '—', '#9ca3af') : ''}
+</table>
+<hr class="divider"/>
+
+<!-- Gross -->
+<div class="gross-box"><span style="font-size:13px;font-weight:600;">GROSS PAY</span><span style="font-size:16px;font-weight:700;">${f(r.grossPay)}</span></div>
+
+<!-- Government -->
+${(r.sssContribution > 0 || r.philhealthContribution > 0 || r.pagibigContribution > 0) ? `
+<table style="margin-top:8px;">
+  <tr><th colspan="2">Government Contributions</th></tr>
+  ${r.sssContribution > 0 ? row('SSS', '-' + f(r.sssContribution), '#dc2626') : ''}
+  ${r.philhealthContribution > 0 ? row('PhilHealth', '-' + f(r.philhealthContribution), '#dc2626') : ''}
+  ${r.pagibigContribution > 0 ? row('Pag-IBIG', '-' + f(r.pagibigContribution), '#dc2626') : ''}
+  ${r.withholdingTax > 0 ? row('Withholding Tax (BIR)', '-' + f(r.withholdingTax), '#dc2626') : ''}
+</table>
+<hr class="divider"/>` : ''}
+
+<!-- Loans -->
+${(r.sssLoan > 0 || r.pagibigLoan > 0 || r.cashAdvance > 0 || r.otherDeductions > 0) ? `
+<table>
+  <tr><th colspan="2">Loans & Other Deductions</th></tr>
+  ${r.sssLoan > 0 ? row('SSS Loan', '-' + f(r.sssLoan), '#dc2626') : ''}
+  ${r.pagibigLoan > 0 ? row('Pag-IBIG Loan', '-' + f(r.pagibigLoan), '#dc2626') : ''}
+  ${r.cashAdvance > 0 ? row('Cash Advance', '-' + f(r.cashAdvance), '#dc2626') : ''}
+  ${r.otherDeductions > 0 ? row('Other Deductions', '-' + f(r.otherDeductions), '#dc2626') : ''}
+</table>
+<hr class="divider"/>` : ''}
+
+<!-- Net Pay -->
+<div class="net-box"><span style="font-size:14px;font-weight:600;">NET PAY</span><span style="font-size:20px;font-weight:700;">${f(r.netPay)}</span></div>
+
+<!-- 13th Month Accrual -->
+${r.thirteenthMonthAccrued > 0 ? `<div style="margin-top:10px;font-size:11px;color:#9ca3af;text-align:right;">13th Month Accrual this period: ${f(r.thirteenthMonthAccrued)}</div>` : ''}
+
+<div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center;">
+  This is a system-generated payslip. · ${company?.name ?? ''} · TIN: ${company?.tin ?? ''}
+</div>
+</body>
+</html>`;
+};
+
+const openPayslip = (html: string) => {
+    const win = window.open('', '_blank', 'width=700,height=900');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+};
+
 // ─── Payroll Breakdown Modal ─────────────────────────────────────────────────
 
 interface PayrollBreakdownModalProps {
     record: PayrollRecord;
     employeeName: string;
+    employeeId: string;
+    department: string;
     periodName: string;
+    payDate: string;
     payFrequency: PayFrequency;
+    company: CompanyProfile | null;
     onClose: () => void;
 }
 
-const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, periodName, payFrequency, onClose }) => {
+const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, onClose }) => {
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const dailyRate = r.dailyRate;
     const hourlyRate = dailyRate / 8;
@@ -220,7 +362,13 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
                     </div>
                 </div>
 
-                <div className="flex justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+                <div className="flex justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+                    <button
+                        onClick={() => openPayslip(generatePayslipHTML(r, employeeName, employeeId, department, periodName, payDate, company, payFrequency))}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Export / Print Payslip
+                    </button>
                     <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                         Close
                     </button>
@@ -239,6 +387,7 @@ interface CreatePeriodModalProps {
 
 const CreatePeriodModal: React.FC<CreatePeriodModalProps> = ({ onClose, onSave }) => {
     const today = new Date();
+    const [is13thMonth, setIs13thMonth] = useState(false);
     const [form, setForm] = useState({
         periodName: '',
         payFrequency: 'semi-monthly' as PayFrequency,
@@ -277,11 +426,43 @@ const CreatePeriodModal: React.FC<CreatePeriodModalProps> = ({ onClose, onSave }
                 </div>
                 <div className="p-6 space-y-4">
                     {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+                    {/* Period type toggle */}
+                    <div className="grid grid-cols-2 gap-2">
+                        {[{ id: false, label: 'Regular Payroll', icon: '₱' }, { id: true, label: '13th Month Pay', icon: '🎁' }].map(opt => (
+                            <button key={String(opt.id)} type="button"
+                                onClick={() => {
+                                    setIs13thMonth(opt.id);
+                                    if (opt.id) {
+                                        const yr = today.getFullYear();
+                                        set('periodName', `13th Month Pay ${yr}`);
+                                        set('periodStart', `${yr}-01-01`);
+                                        set('periodEnd', `${yr}-12-31`);
+                                        set('payDate', `${yr}-12-24`);
+                                        set('notes', 'P.D. 851 – 13th Month Pay');
+                                    } else {
+                                        set('periodName', '');
+                                    }
+                                }}
+                                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${is13thMonth === opt.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                <span>{opt.icon}</span>
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {is13thMonth && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+                            <strong>13th Month Pay (P.D. 851)</strong> — accrual is calculated as 1/12 of the employee's annual basic salary. Each regular payroll period already records the monthly accrual. This period will sum the accruals for the full calendar year.
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Period Name *</label>
                         <input value={form.periodName} onChange={e => set('periodName', e.target.value)}
                             placeholder="e.g. April 1-15, 2025" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
+                    {!is13thMonth && (
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Pay Frequency *</label>
                         <select value={form.payFrequency} onChange={e => set('payFrequency', e.target.value as PayFrequency)}
@@ -292,6 +473,7 @@ const CreatePeriodModal: React.FC<CreatePeriodModalProps> = ({ onClose, onSave }
                             <option value="weekly">Weekly</option>
                         </select>
                     </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Period Start *</label>
@@ -767,6 +949,273 @@ const AddAdjustmentModal: React.FC<AddAdjustmentModalProps> = ({ periodId, emplo
     );
 };
 
+// ─── Payroll Reports Component ───────────────────────────────────────────────
+
+interface PayrollReportsProps {
+    records: PayrollRecord[];
+    employees: Employee[];
+    period: PayrollPeriod;
+    company: CompanyProfile | null;
+    empMap: Map<string, Employee>;
+}
+
+const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap }) => {
+    const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'payslips-all'>('payroll-register');
+
+    const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
+    const totalNet = records.reduce((s, r) => s + r.netPay, 0);
+    const totalSSS = records.reduce((s, r) => s + r.sssContribution, 0);
+    const totalPH = records.reduce((s, r) => s + r.philhealthContribution, 0);
+    const totalPIBIG = records.reduce((s, r) => s + r.pagibigContribution, 0);
+    const totalTax = records.reduce((s, r) => s + r.withholdingTax, 0);
+    const totalAbsent = records.reduce((s, r) => s + r.absentDeduction, 0);
+    const totalLate = records.reduce((s, r) => s + r.lateDeduction + r.undertimeDeduction, 0);
+    const totalOT = records.reduce((s, r) => s + r.overtimePay, 0);
+    const total13th = records.reduce((s, r) => s + (r.thirteenthMonthAccrued ?? 0), 0);
+
+    const printReport = (title: string, htmlBody: string) => {
+        const logoHTML = company?.logo
+            ? `<img src="${company.logo}" style="height:40px;object-fit:contain;" />`
+            : `<div style="font-size:20px;font-weight:700;color:#1e40af;">${company?.name ?? ''}</div>`;
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title>
+<style>
+  body{font-family:Arial,sans-serif;color:#111;padding:20px;} @media print{.no-print{display:none!important;} @page{margin:15mm;}}
+  table{width:100%;border-collapse:collapse;font-size:11px;} th{background:#f3f4f6;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;color:#6b7280;} td{padding:5px 8px;border-bottom:1px solid #f3f4f6;} tfoot td{font-weight:700;background:#f9fafb;}
+</style></head><body>
+<div class="no-print" style="margin-bottom:16px;"><button onclick="window.print()" style="background:#1d4ed8;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-right:8px;">Print / Save PDF</button><button onclick="window.close()" style="border:1px solid #d1d5db;padding:8px 20px;border-radius:6px;cursor:pointer;">Close</button></div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e5e7eb;">
+  ${logoHTML}
+  <div style="flex:1;"><div style="font-size:16px;font-weight:700;">${company?.name ?? ''}</div><div style="font-size:11px;color:#6b7280;">${company?.address ?? ''}</div></div>
+  <div style="text-align:right;"><div style="font-size:14px;font-weight:700;color:#1d4ed8;">${title}</div><div style="font-size:11px;color:#6b7280;">${period.periodName} · ${period.periodStart} to ${period.periodEnd}</div></div>
+</div>
+${htmlBody}
+<div style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:center;">System-generated · ${company?.name ?? ''}</div>
+</body></html>`;
+        const win = window.open('', '_blank', 'width=900,height=800');
+        if (!win) return;
+        win.document.write(html);
+        win.document.close();
+    };
+
+    const printPayrollRegister = () => {
+        const rows = records.map(r => {
+            const e = empMap.get(r.employeeId);
+            const name = e ? `${e.lastName}, ${e.firstName}` : r.employeeId;
+            const tard = r.lateDeduction + r.undertimeDeduction;
+            return `<tr>
+              <td>${name}</td><td>${e?.department ?? ''}</td>
+              <td style="text-align:right">${r.daysWorked}</td>
+              <td style="text-align:right">₱${r.basicPay.toFixed(2)}</td>
+              <td style="text-align:right">${r.overtimePay > 0 ? '₱' + r.overtimePay.toFixed(2) : '—'}</td>
+              <td style="text-align:right">${r.absentDeduction > 0 ? '-₱' + r.absentDeduction.toFixed(2) : '—'}</td>
+              <td style="text-align:right">${tard > 0 ? '-₱' + tard.toFixed(2) : '—'}</td>
+              <td style="text-align:right">₱${r.grossPay.toFixed(2)}</td>
+              <td style="text-align:right">₱${(r.sssContribution + r.philhealthContribution + r.pagibigContribution).toFixed(2)}</td>
+              <td style="text-align:right">₱${r.withholdingTax.toFixed(2)}</td>
+              <td style="text-align:right;font-weight:600;">₱${r.netPay.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+        printReport('Payroll Register', `<table>
+          <thead><tr><th>Employee</th><th>Dept.</th><th>Days</th><th>Basic Pay</th><th>OT Pay</th><th>Absences</th><th>Tardiness</th><th>Gross</th><th>Contributions</th><th>W/Tax</th><th>Net Pay</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="3">TOTAL (${records.length} employees)</td><td>₱${records.reduce((s,r)=>s+r.basicPay,0).toFixed(2)}</td><td>₱${totalOT.toFixed(2)}</td><td>-₱${totalAbsent.toFixed(2)}</td><td>-₱${totalLate.toFixed(2)}</td><td>₱${totalGross.toFixed(2)}</td><td>₱${(totalSSS+totalPH+totalPIBIG).toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td><td>₱${totalNet.toFixed(2)}</td></tr></tfoot>
+        </table>`);
+    };
+
+    const printContributions = () => {
+        const rows = records.map(r => {
+            const e = empMap.get(r.employeeId);
+            const name = e ? `${e.lastName}, ${e.firstName}` : r.employeeId;
+            return `<tr>
+              <td>${name}</td><td>${e?.department ?? ''}</td>
+              <td style="text-align:right">₱${r.basicSalary.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.sssContribution.toFixed(2)}</td>
+              <td style="text-align:right">₱${(r.sssContribution * 9.5 / 4.5).toFixed(2)}</td>
+              <td style="text-align:right">₱${r.philhealthContribution.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.philhealthContribution.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.pagibigContribution.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.pagibigContribution.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.withholdingTax.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+        printReport('Government Contributions Report', `<table>
+          <thead><tr><th>Employee</th><th>Dept.</th><th>Basic Salary</th><th>SSS (EE)</th><th>SSS (ER)</th><th>PhilHealth (EE)</th><th>PhilHealth (ER)</th><th>Pag-IBIG (EE)</th><th>Pag-IBIG (ER)</th><th>W/Tax (BIR)</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="3">TOTAL</td><td>₱${totalSSS.toFixed(2)}</td><td>₱${(totalSSS*9.5/4.5).toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td></tr></tfoot>
+        </table>`);
+    };
+
+    const printAttendanceCost = () => {
+        const rows = records.map(r => {
+            const e = empMap.get(r.employeeId);
+            const name = e ? `${e.lastName}, ${e.firstName}` : r.employeeId;
+            const tard = r.lateDeduction + r.undertimeDeduction;
+            return `<tr>
+              <td>${name}</td><td>${e?.department ?? ''}</td>
+              <td style="text-align:right">${r.daysWorked}</td>
+              <td style="text-align:right">${r.absentDays}</td>
+              <td style="text-align:right">${r.lateMinutes}</td>
+              <td style="text-align:right">${r.undertimeMinutes}</td>
+              <td style="text-align:right">${r.overtimeHours.toFixed(2)}</td>
+              <td style="text-align:right">${r.absentDeduction > 0 ? '-₱'+r.absentDeduction.toFixed(2) : '—'}</td>
+              <td style="text-align:right">${tard > 0 ? '-₱'+tard.toFixed(2) : '—'}</td>
+              <td style="text-align:right">${r.overtimePay > 0 ? '₱'+r.overtimePay.toFixed(2) : '—'}</td>
+            </tr>`;
+        }).join('');
+        printReport('Attendance Cost Analysis', `<table>
+          <thead><tr><th>Employee</th><th>Dept.</th><th>Days Worked</th><th>Absences</th><th>Late (min)</th><th>Undertime (min)</th><th>OT Hours</th><th>Absent Deduction</th><th>Tardiness Deduction</th><th>OT Pay</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr>
+            <td colspan="3">TOTAL</td>
+            <td style="text-align:right">${records.reduce((s,r)=>s+r.absentDays,0)}</td>
+            <td style="text-align:right">${records.reduce((s,r)=>s+r.lateMinutes,0)}</td>
+            <td style="text-align:right">${records.reduce((s,r)=>s+r.undertimeMinutes,0)}</td>
+            <td style="text-align:right">${records.reduce((s,r)=>s+r.overtimeHours,0).toFixed(2)}</td>
+            <td style="text-align:right">-₱${totalAbsent.toFixed(2)}</td>
+            <td style="text-align:right">-₱${totalLate.toFixed(2)}</td>
+            <td style="text-align:right">₱${totalOT.toFixed(2)}</td>
+          </tr></tfoot>
+        </table>`);
+    };
+
+    const print13thMonth = () => {
+        const rows = records.map(r => {
+            const e = empMap.get(r.employeeId);
+            const name = e ? `${e.lastName}, ${e.firstName}` : r.employeeId;
+            const accrued = r.thirteenthMonthAccrued ?? 0;
+            return `<tr>
+              <td>${name}</td><td>${e?.department ?? ''}</td>
+              <td style="text-align:right">₱${r.basicSalary.toFixed(2)}</td>
+              <td style="text-align:right">₱${accrued.toFixed(2)}</td>
+              <td style="font-size:10px;color:#6b7280;padding-left:8px;">= Monthly ÷ 12</td>
+            </tr>`;
+        }).join('');
+        printReport('13th Month Pay Accrual (P.D. 851)', `
+          <p style="font-size:11px;color:#6b7280;margin-bottom:12px;">13th Month Pay accrual this period. Full year accrual = sum of all periods' monthly basic ÷ 12.</p>
+          <table>
+            <thead><tr><th>Employee</th><th>Dept.</th><th>Monthly Basic</th><th>Accrual This Period</th><th>Formula</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot><tr><td colspan="3">TOTAL ACCRUAL THIS PERIOD</td><td style="text-align:right">₱${total13th.toFixed(2)}</td><td></td></tr></tfoot>
+          </table>`);
+    };
+
+    const printAllPayslips = () => {
+        const allHTML = records.map(r => {
+            const e = empMap.get(r.employeeId);
+            const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
+            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency);
+        });
+        // Open first payslip; for multiple, we'd need a combined view
+        const combined = allHTML.map((h, i) =>
+            `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE.*?<body[^>]*>/s, '').replace('</body></html>', '')}</div>`
+        ).join('');
+        const win = window.open('', '_blank', 'width=750,height=900');
+        if (!win) return;
+        win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>All Payslips – ${period.periodName}</title>
+<style>body{font-family:Arial,sans-serif;color:#111;padding:20px;} @media print{.no-print{display:none!important;} @page{margin:15mm;}} table{width:100%;border-collapse:collapse;} th{background:#f3f4f6;font-size:10px;text-transform:uppercase;padding:5px 8px;} td{padding:4px 8px;font-size:11px;border-bottom:1px solid #f3f4f6;} .gross-box{background:#1d4ed8;color:white;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;margin:6px 0;} .net-box{background:#166534;color:white;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;margin-top:6px;} hr{border:none;border-top:1px solid #e5e7eb;margin:8px 0;}</style></head>
+<body>
+<div class="no-print" style="margin-bottom:12px;"><button onclick="window.print()" style="background:#1d4ed8;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-right:8px;">Print All</button><button onclick="window.close()" style="border:1px solid #d1d5db;padding:8px 20px;border-radius:6px;cursor:pointer;">Close</button></div>
+${combined}
+</body></html>`);
+        win.document.close();
+    };
+
+    const reportOptions = [
+        { id: 'payroll-register' as const, label: 'Payroll Register', desc: 'Full payroll register with earnings and deductions', action: printPayrollRegister },
+        { id: 'contributions' as const, label: 'Government Contributions', desc: 'SSS, PhilHealth, Pag-IBIG, and BIR withholding tax', action: printContributions },
+        { id: 'attendance-cost' as const, label: 'Attendance Cost Analysis', desc: 'Absences, tardiness, and OT cost breakdown', action: printAttendanceCost },
+        { id: 'thirteenth-month' as const, label: '13th Month Accrual', desc: 'Monthly accrual per employee (P.D. 851)', action: print13thMonth },
+        { id: 'payslips-all' as const, label: 'All Payslips (Bulk)', desc: 'Print/export payslips for all employees at once', action: printAllPayslips },
+    ];
+
+    const selected = reportOptions.find(r => r.id === reportType)!;
+
+    return (
+        <div className="space-y-6">
+            {/* Report type selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {reportOptions.map(opt => (
+                    <button key={opt.id} onClick={() => setReportType(opt.id)}
+                        className={`text-left p-4 rounded-xl border transition-all ${reportType === opt.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
+                        <p className={`text-sm font-semibold ${reportType === opt.id ? 'text-blue-700' : 'text-gray-800'}`}>{opt.label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                    </button>
+                ))}
+            </div>
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                    { label: 'Total Gross Pay', value: fmt(totalGross), color: 'text-blue-700' },
+                    { label: 'Total Net Pay', value: fmt(totalNet), color: 'text-green-700' },
+                    { label: 'Total Contributions', value: fmt(totalSSS + totalPH + totalPIBIG), color: 'text-red-600' },
+                    { label: '13th Month Accrual', value: fmt(total13th), color: 'text-amber-700' },
+                ].map(s => (
+                    <div key={s.label} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                        <p className="text-xs text-gray-500">{s.label}</p>
+                        <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Per-employee preview table */}
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600">Employee</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Gross Pay</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Contributions</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">W/Tax</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Net Pay</th>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">13th Mo. Accrual</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {records.map(r => {
+                            const e = empMap.get(r.employeeId);
+                            return (
+                                <tr key={r.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5">
+                                        <p className="font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</p>
+                                        <p className="text-xs text-gray-400">{e?.department}</p>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right">{fmt(r.grossPay)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.sssContribution + r.philhealthContribution + r.pagibigContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.withholdingTax)}</td>
+                                    <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmt(r.netPay)}</td>
+                                    <td className="px-3 py-2.5 text-right text-amber-700">{fmt(r.thirteenthMonthAccrued ?? 0)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold">
+                        <tr>
+                            <td className="px-3 py-2.5 text-gray-900">TOTAL ({records.length})</td>
+                            <td className="px-3 py-2.5 text-right">{fmt(totalGross)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalSSS + totalPH + totalPIBIG)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalTax)}</td>
+                            <td className="px-3 py-2.5 text-right text-green-700">{fmt(totalNet)}</td>
+                            <td className="px-3 py-2.5 text-right text-amber-700">{fmt(total13th)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            {/* Export button */}
+            <div className="flex justify-end">
+                <button
+                    onClick={selected.action}
+                    disabled={records.length === 0}
+                    className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-40 flex items-center gap-2 shadow-sm">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                    Export: {selected.label}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // ─── Period Detail View ─────────────────────────────────────────────────────
 
 interface PeriodDetailProps {
@@ -789,7 +1238,8 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
     const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
     const [breakdownRecord, setBreakdownRecord] = useState<PayrollRecord | null>(null);
     const [showAdjModal, setShowAdjModal] = useState(false);
-    const [tab, setTab] = useState<'records' | 'adjustments' | 'summary'>('records');
+    const [tab, setTab] = useState<'records' | 'adjustments' | 'summary' | 'reports'>('records');
+    const [company, setCompany] = useState<CompanyProfile | null>(null);
     const [search, setSearch] = useState('');
 
     const empMap = new Map(employees.map(e => [e.id, e]));
@@ -808,6 +1258,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
         setShifts(shiftsData);
         setHolidays(holidaysData);
         if (company) {
+            setCompany(company);
             setCompanySchedule(company.workSchedule);
             setGracePeriodMinutes(company.gracePeriodMinutes ?? 5);
             setEmployerShouldersContributions(company.employerShouldersContributions ?? false);
@@ -895,11 +1346,11 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 mb-4 border-b border-gray-200">
-                {(['records', 'adjustments', 'summary'] as const).map(t => (
+            <div className="flex gap-1 mb-4 border-b border-gray-200 overflow-x-auto">
+                {(['records', 'adjustments', 'summary', 'reports'] as const).map(t => (
                     <button key={t} onClick={() => setTab(t)}
-                        className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                        {t === 'records' ? `Records (${records.length})` : t === 'adjustments' ? `Adjustments (${adjustments.length})` : 'Gov\'t Summary'}
+                        className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                        {t === 'records' ? `Records (${records.length})` : t === 'adjustments' ? `Adjustments (${adjustments.length})` : t === 'summary' ? "Gov't Summary" : 'Payroll Reports'}
                     </button>
                 ))}
             </div>
@@ -969,10 +1420,21 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                     </button>
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    {canEdit && (
-                                                        <button onClick={() => setEditRecord(r)}
-                                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        {canEdit && (
+                                                            <button onClick={() => setEditRecord(r)}
+                                                                className="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => {
+                                                                const emp = empMap.get(r.employeeId);
+                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency));
+                                                            }}
+                                                            className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+                                                            title="Export payslip">
+                                                            PDF
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -1048,7 +1510,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : tab === 'summary' ? (
                 /* Government Contributions Summary */
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1086,17 +1548,33 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                         </div>
                     </div>
                 </div>
-            )}
-
-            {breakdownRecord && (
-                <PayrollBreakdownModal
-                    record={breakdownRecord}
-                    employeeName={(() => { const e = empMap.get(breakdownRecord.employeeId); return e ? `${e.firstName} ${e.lastName}` : ''; })()}
-                    periodName={period.periodName}
-                    payFrequency={period.payFrequency}
-                    onClose={() => setBreakdownRecord(null)}
+            ) : (
+                /* ── Comprehensive Payroll Reports ── */
+                <PayrollReports
+                    records={records}
+                    employees={employees}
+                    period={period}
+                    company={company}
+                    empMap={empMap}
                 />
             )}
+
+            {breakdownRecord && (() => {
+                const e = empMap.get(breakdownRecord.employeeId);
+                return (
+                    <PayrollBreakdownModal
+                        record={breakdownRecord}
+                        employeeName={e ? `${e.firstName} ${e.lastName}` : ''}
+                        employeeId={e?.employeeId ?? ''}
+                        department={e?.department ?? ''}
+                        periodName={period.periodName}
+                        payDate={period.payDate}
+                        payFrequency={period.payFrequency}
+                        company={company}
+                        onClose={() => setBreakdownRecord(null)}
+                    />
+                );
+            })()}
             {editRecord && (
                 <EditRecordModal
                     record={editRecord}

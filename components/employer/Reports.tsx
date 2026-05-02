@@ -13,18 +13,6 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     return <span className={`status-badge ${statusClasses[status]}`}>{status}</span>;
 }
 
-// Define a type for the payroll summary items
-type PayrollSummaryItem = {
-    employeeId: string;
-    employeeName: string;
-    employeeEmail: string;
-    totalHours: string;
-    otHours: string;
-    leaveDays: number;
-    grossPay: string;
-};
-
-
 export const Reports: React.FC = () => {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -37,12 +25,6 @@ export const Reports: React.FC = () => {
     const [recordToEdit, setRecordToEdit] = useState<AttendanceRecord | undefined>(undefined);
     const [selectedImage, setSelectedImage] = useState<{ src: string; label: string } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-
-    // Payroll state
-    const [payrollSummary, setPayrollSummary] = useState<PayrollSummaryItem[]>([]);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [processMessage, setProcessMessage] = useState('');
 
     const today = new Date();
     const currentDay = today.getDate();
@@ -111,30 +93,6 @@ export const Reports: React.FC = () => {
         setRecordToEdit(undefined);
         fetchData();
     };
-
-    const handleGeneratePayroll = async () => {
-        setIsGenerating(true);
-        setProcessMessage('');
-        const summary = await api.calculatePayrollSummary(startDate, endDate);
-        setPayrollSummary(summary);
-        setIsGenerating(false);
-    };
-
-    const handleProcessPayroll = async () => {
-        if (payrollSummary.length === 0) return;
-        
-        setIsProcessing(true);
-        setProcessMessage('');
-        const result = await api.processPayrollAndNotify(payrollSummary);
-        setIsProcessing(false);
-        
-        if(result.successCount > 0) {
-            setProcessMessage(`${result.successCount} of ${payrollSummary.length} payslip notifications sent successfully.`);
-        } else {
-             setProcessMessage(`Failed to send notifications. Please check your EmailJS configuration.`);
-        }
-    };
-
 
     const filteredAttendance = useMemo(() => {
         const todayStr = new Date().toISOString().split('T')[0];
@@ -412,65 +370,6 @@ export const Reports: React.FC = () => {
 
     return (
         <div className="card space-y-8">
-             {/* Payroll Section */}
-            <div className="p-4 border-2 border-dashed rounded-lg bg-slate-50">
-                <h2 className="text-xl font-bold text-slate-800 mb-4">Payroll Processing</h2>
-                <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 bg-slate-100 p-3 rounded-md">
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium">Period:</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="input-field"/>
-                        <span>to</span>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="input-field"/>
-                    </div>
-                    <button onClick={handleGeneratePayroll} disabled={isGenerating} className="btn btn-secondary w-full md:w-auto">
-                        {isGenerating ? 'Generating...' : 'Generate Summary'}
-                    </button>
-                </div>
-
-                {payrollSummary.length > 0 && (
-                    <div className="animate-fade-in">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 text-sm">
-                                <thead className="bg-slate-100">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left font-medium text-gray-600">Employee</th>
-                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Total Hours</th>
-                                        <th className="px-4 py-2 text-right font-medium text-gray-600">OT Hours</th>
-                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Leave Days</th>
-                                        <th className="px-4 py-2 text-right font-medium text-gray-600">Gross Pay (Est.)</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {payrollSummary.map(item => (
-                                        <tr key={item.employeeId}>
-                                            <td className="px-4 py-2 whitespace-nowrap font-medium text-gray-800">{item.employeeName}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.totalHours}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.otHours}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right">{item.leaveDays}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-right font-semibold">
-                                                {parseFloat(item.grossPay) > 0 ? `$${parseFloat(item.grossPay).toLocaleString()}` : 'N/A'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="mt-4 text-xs text-slate-500">
-                            <strong>Note:</strong> Gross Pay is an estimate based on the latest monthly salary record, assuming a 40-hour work week. Overtime is calculated at 1.5x the hourly rate. This does not include taxes or other deductions.
-                        </div>
-                        <div className="mt-4 flex flex-col md:flex-row justify-end items-center gap-4">
-                            {processMessage && <p className="text-sm font-semibold text-green-700">{processMessage}</p>}
-                            <button onClick={handleProcessPayroll} disabled={isProcessing} className="btn btn-primary bg-green-600 hover:bg-green-700 w-full md:w-auto">
-                                {isProcessing ? 'Processing...' : 'Process Payroll & Notify Employees'}
-                            </button>
-                        </div>
-                         <div className="mt-2 text-xs text-slate-500 text-right">
-                            Requires a configured EmailJS template for payslips.
-                        </div>
-                    </div>
-                )}
-            </div>
-
             <div className="mb-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <h2 className="text-xl font-bold text-slate-800">Historical Data & Reports</h2>

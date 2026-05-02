@@ -3343,6 +3343,7 @@ export const computeEmployeePayroll = async (params: {
     employerShouldersContributions?: boolean;
     hourlyRateOverride?: number | null;
     shiftHours?: number;
+    employmentType?: string;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3359,7 +3360,10 @@ export const computeEmployeePayroll = async (params: {
         employerShouldersContributions = false,
         hourlyRateOverride = null,
         shiftHours = 8,
+        employmentType = '',
     } = params;
+
+    const isPartTime = employmentType === EmploymentType.PART_TIME;
 
     // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
@@ -3390,18 +3394,12 @@ export const computeEmployeePayroll = async (params: {
     const undertimeDeduction = undertimeMinutes * minuteRate;
 
     // ── OT & Holiday Premiums (PH Labor Code) ────────────────────────────────
-    // Regular OT: 125% of hourly rate per OT hour (PH Labor Code Art. 87)
-    // OT hours are beyond the regular shift, so basicPay does NOT already include them.
-    const overtimePay       = overtimeHours * hourlyRate * 1.25;
-    // Regular Holiday: employee is already paid via basicPay (dailyRate × scheduledWorkDays
-    // which includes the holiday). Working on a regular holiday earns an additional 100% premium.
-    const regularHolidayPay = regularHolidayHours * hourlyRate * 1.0;
-    // Special Holiday: +30% premium on top of normal daily pay for hours worked
-    const specialHolidayPay = specialHolidayHours * hourlyRate * 0.30;
-    // Night Differential: +10% for hours worked between 22:00–06:00
-    const nightDiffPay      = nightDiffHours * hourlyRate * 0.10;
-    // Rest Day: +30% premium for working on scheduled day off
-    const restDayPay        = restDayHours * hourlyRate * 0.30;
+    // Part-time employees receive no OT or holiday premiums per employment terms.
+    const overtimePay       = isPartTime ? 0 : overtimeHours * hourlyRate * 1.25;
+    const regularHolidayPay = isPartTime ? 0 : regularHolidayHours * hourlyRate * 1.0;
+    const specialHolidayPay = isPartTime ? 0 : specialHolidayHours * hourlyRate * 0.30;
+    const nightDiffPay      = isPartTime ? 0 : nightDiffHours * hourlyRate * 0.10;
+    const restDayPay        = isPartTime ? 0 : restDayHours * hourlyRate * 0.30;
 
     const thirteenthMonthAccrued = monthlyBasic / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
@@ -3413,27 +3411,24 @@ export const computeEmployeePayroll = async (params: {
         - absentDeduction - lateDeduction - undertimeDeduction
         + allowance + otherBenefits + totalDeMinimis;
 
-    // ── Contributions (based on full monthly basic salary, split per period) ──
-    const monthlySss        = await computeSSSContribution(monthlyBasic);
-    const monthlyPhilhealth = await computePhilHealthContribution(monthlyBasic);
-    const monthlyPagibig    = await computePagIBIGContribution(monthlyBasic);
-    // For semi-monthly, each period carries half the monthly contribution
+    // ── Contributions — part-time employees are exempt ───────────────────────
+    const monthlySss        = isPartTime ? 0 : await computeSSSContribution(monthlyBasic);
+    const monthlyPhilhealth = isPartTime ? 0 : await computePhilHealthContribution(monthlyBasic);
+    const monthlyPagibig    = isPartTime ? 0 : await computePagIBIGContribution(monthlyBasic);
     const sssContribution        = monthlySss        / benefitDivisor;
     const philhealthContribution = monthlyPhilhealth / benefitDivisor;
     const pagibigContribution    = monthlyPagibig    / benefitDivisor;
     const totalContributions     = sssContribution + philhealthContribution + pagibigContribution;
 
     // ── Withholding Tax — BIR Annualized Method (TRAIN Law) ──────────────────
-    // Allowance and otherBenefits are non-taxable by default per user policy.
-    // Taxable monthly compensation = basic salary + taxable de minimis excess − monthly contributions.
     const monthlyTotalContributions = monthlySss + monthlyPhilhealth + monthlyPagibig;
-    const monthlyTaxableComp = Math.max(0, monthlyBasic + deMinimisExcess - monthlyTotalContributions);
+    const monthlyTaxableComp = isPartTime ? 0 : Math.max(0, monthlyBasic + deMinimisExcess - monthlyTotalContributions);
     const annualTaxable      = monthlyTaxableComp * 12;
-    const annualTax          = await computeWithholdingTax(annualTaxable);
+    const annualTax          = isPartTime ? 0 : await computeWithholdingTax(annualTaxable);
     const periodsPerMonth: Record<PayFrequency, number> = {
         monthly: 1, 'semi-monthly': 2, 'bi-weekly': 2.1667, weekly: 4.3333,
     };
-    const withholdingTax = Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
+    const withholdingTax = isPartTime ? 0 : Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
 
     // ── Net Pay ───────────────────────────────────────────────────────────────
     // When employer shoulders contributions, they are not deducted from employee take-home.
@@ -3826,6 +3821,7 @@ export const generatePayrollForPeriod = async (
             employerShouldersContributions,
             hourlyRateOverride: latestSalary.hourlyRate ?? null,
             shiftHours,
+            employmentType: emp.employmentType,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);
