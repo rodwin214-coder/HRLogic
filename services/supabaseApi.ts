@@ -3550,22 +3550,16 @@ export const createPayrollPeriod = async (period: {
     payDate: string;
     notes?: string;
 }): Promise<PayrollPeriod | { error: string }> => {
-    await ensureUserContext();
     if (!currentCompanyId) return { error: 'Company ID not set. Please log out and log back in.' };
-    const { data, error } = await supabase
-        .from('payroll_periods')
-        .insert([{
-            company_id: currentCompanyId,
-            period_name: period.periodName,
-            pay_frequency: period.payFrequency,
-            period_start: period.periodStart,
-            period_end: period.periodEnd,
-            pay_date: period.payDate,
-            notes: period.notes ?? '',
-            status: 'Draft',
-        }])
-        .select()
-        .single();
+    const { data, error } = await supabase.rpc('create_payroll_period', {
+        p_company_id:    currentCompanyId,
+        p_period_name:   period.periodName,
+        p_pay_frequency: period.payFrequency,
+        p_period_start:  period.periodStart,
+        p_period_end:    period.periodEnd,
+        p_pay_date:      period.payDate,
+        p_notes:         period.notes ?? '',
+    });
     if (error) {
         console.error('createPayrollPeriod error:', error);
         return { error: error.message };
@@ -3575,14 +3569,14 @@ export const createPayrollPeriod = async (period: {
 
 export const updatePayrollPeriodStatus = async (periodId: string, status: PayrollStatus): Promise<void> => {
     try {
-        await ensureUserContext();
-        const { error } = await supabase
-            .from('payroll_periods')
-            .update({ status, updated_at: new Date().toISOString() })
-            .eq('id', periodId)
-            .eq('company_id', currentCompanyId);
-        if (error) throw error;
+        if (!currentCompanyId) return;
+        await supabase.rpc('update_payroll_period_status', {
+            p_period_id:  periodId,
+            p_company_id: currentCompanyId,
+            p_status:     status,
+        });
         if (status === 'Paid') {
+            await ensureUserContext();
             await supabase
                 .from('payroll_records')
                 .update({ status: 'Paid', updated_at: new Date().toISOString() })
@@ -3595,15 +3589,14 @@ export const updatePayrollPeriodStatus = async (periodId: string, status: Payrol
 
 export const deletePayrollPeriod = async (periodId: string): Promise<void> => {
     try {
+        if (!currentCompanyId) return;
         await ensureUserContext();
         await supabase.from('payroll_adjustments').delete().eq('period_id', periodId);
         await supabase.from('payroll_records').delete().eq('period_id', periodId);
-        const { error } = await supabase
-            .from('payroll_periods')
-            .delete()
-            .eq('id', periodId)
-            .eq('company_id', currentCompanyId);
-        if (error) throw error;
+        await supabase.rpc('delete_payroll_period', {
+            p_period_id:  periodId,
+            p_company_id: currentCompanyId,
+        });
     } catch (err) {
         console.error('deletePayrollPeriod error:', err);
     }
@@ -3628,57 +3621,50 @@ export const getPayrollRecords = async (periodId: string): Promise<PayrollRecord
 
 export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Promise<PayrollRecord | null> => {
     try {
-        await ensureUserContext();
-        const row = {
-            company_id: record.companyId,
-            period_id: record.periodId,
-            employee_id: record.employeeId,
-            basic_salary: record.basicSalary,
-            daily_rate: record.dailyRate,
-            days_worked: record.daysWorked,
-            hours_worked: record.hoursWorked,
-            basic_pay: record.basicPay,
-            absent_days: record.absentDays,
-            absent_deduction: record.absentDeduction,
-            late_minutes: record.lateMinutes,
-            late_deduction: record.lateDeduction,
-            undertime_minutes: record.undertimeMinutes,
-            undertime_deduction: record.undertimeDeduction,
-            overtime_hours: record.overtimeHours,
-            overtime_pay: record.overtimePay,
-            regular_holiday_hours: record.regularHolidayHours,
-            regular_holiday_pay: record.regularHolidayPay,
-            special_holiday_hours: record.specialHolidayHours,
-            special_holiday_pay: record.specialHolidayPay,
-            night_diff_hours: record.nightDiffHours,
-            night_diff_pay: record.nightDiffPay,
-            rest_day_hours: record.restDayHours,
-            rest_day_pay: record.restDayPay,
-            allowance: record.allowance,
-            de_minimis: record.deMinimis,
-            thirteenth_month_accrued: record.thirteenthMonthAccrued,
-            gross_pay: record.grossPay,
-            sss_contribution: record.sssContribution,
-            philhealth_contribution: record.philhealthContribution,
-            pagibig_contribution: record.pagibigContribution,
-            total_contributions: record.totalContributions,
-            taxable_income: record.taxableIncome,
-            withholding_tax: record.withholdingTax,
-            sss_loan: record.sssLoan,
-            pagibig_loan: record.pagibigLoan,
-            cash_advance: record.cashAdvance,
-            other_deductions: record.otherDeductions,
-            total_deductions: record.totalDeductions,
-            net_pay: record.netPay,
-            status: record.status,
-            notes: record.notes,
-            updated_at: new Date().toISOString(),
-        };
-        const { data, error } = await supabase
-            .from('payroll_records')
-            .upsert([row], { onConflict: 'period_id,employee_id' })
-            .select()
-            .single();
+        const { data, error } = await supabase.rpc('upsert_payroll_record', {
+            p_company_id:               record.companyId,
+            p_period_id:                record.periodId,
+            p_employee_id:              record.employeeId,
+            p_basic_salary:             record.basicSalary,
+            p_daily_rate:               record.dailyRate,
+            p_days_worked:              record.daysWorked,
+            p_hours_worked:             record.hoursWorked,
+            p_basic_pay:                record.basicPay,
+            p_absent_days:              record.absentDays,
+            p_absent_deduction:         record.absentDeduction,
+            p_late_minutes:             record.lateMinutes,
+            p_late_deduction:           record.lateDeduction,
+            p_undertime_minutes:        record.undertimeMinutes,
+            p_undertime_deduction:      record.undertimeDeduction,
+            p_overtime_hours:           record.overtimeHours,
+            p_overtime_pay:             record.overtimePay,
+            p_regular_holiday_hours:    record.regularHolidayHours,
+            p_regular_holiday_pay:      record.regularHolidayPay,
+            p_special_holiday_hours:    record.specialHolidayHours,
+            p_special_holiday_pay:      record.specialHolidayPay,
+            p_night_diff_hours:         record.nightDiffHours,
+            p_night_diff_pay:           record.nightDiffPay,
+            p_rest_day_hours:           record.restDayHours,
+            p_rest_day_pay:             record.restDayPay,
+            p_allowance:                record.allowance,
+            p_de_minimis:               record.deMinimis,
+            p_thirteenth_month_accrued: record.thirteenthMonthAccrued,
+            p_gross_pay:                record.grossPay,
+            p_sss_contribution:         record.sssContribution,
+            p_philhealth_contribution:  record.philhealthContribution,
+            p_pagibig_contribution:     record.pagibigContribution,
+            p_total_contributions:      record.totalContributions,
+            p_taxable_income:           record.taxableIncome,
+            p_withholding_tax:          record.withholdingTax,
+            p_sss_loan:                 record.sssLoan,
+            p_pagibig_loan:             record.pagibigLoan,
+            p_cash_advance:             record.cashAdvance,
+            p_other_deductions:         record.otherDeductions,
+            p_total_deductions:         record.totalDeductions,
+            p_net_pay:                  record.netPay,
+            p_status:                   record.status,
+            p_notes:                    record.notes,
+        });
         if (error) throw error;
         return dbRecordToPayrollRecord(data);
     } catch (err) {
