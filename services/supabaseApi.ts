@@ -3294,6 +3294,7 @@ export const computeEmployeePayroll = async (params: {
     nightDiffHours?: number;
     restDayHours?: number;
     allowance?: number;
+    otherBenefits?: number;
     deMinimisExempt?: number;
     deMinimisExcess?: number;
     payFrequency: PayFrequency;
@@ -3303,56 +3304,65 @@ export const computeEmployeePayroll = async (params: {
         hoursWorked: hoursWorkedParam,
         absentDays = 0, lateMinutes = 0, undertimeMinutes = 0,
         overtimeHours = 0, regularHolidayHours = 0, specialHolidayHours = 0,
-        nightDiffHours = 0, restDayHours = 0, allowance = 0,
+        nightDiffHours = 0, restDayHours = 0,
+        allowance: rawAllowance = 0,
+        otherBenefits: rawOtherBenefits = 0,
         deMinimisExempt = 0, deMinimisExcess = 0,
         payFrequency,
     } = params;
 
-    const periodsPerYear: Record<PayFrequency, number> = {
-        weekly: 52, 'bi-weekly': 26, 'semi-monthly': 24, monthly: 12,
-    };
-    const totalPeriodsYear = periodsPerYear[payFrequency];
-    const monthlyEquivalent = basicSalary;
+    // For semi-monthly, allowance and other benefits are split across 2 pay periods
+    const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
+    const allowance     = rawAllowance / benefitDivisor;
+    const otherBenefits = rawOtherBenefits / benefitDivisor;
 
-    const dailyRate = monthlyEquivalent / 22;
+    // Monthly basic salary is always the reference for contributions and tax
+    const monthlyBasic = basicSalary;
+
+    const dailyRate  = monthlyBasic / 22;
     const hourlyRate = dailyRate / 8;
     const minuteRate = hourlyRate / 60;
 
-    // Basic pay = full period pay minus absent days
-    // (daysWorked already excludes absences, so basicPay naturally reflects only worked days)
+    // Basic pay covers only days actually worked (absences already excluded from daysWorked)
     const basicPay = dailyRate * daysWorked;
 
-    // Absent deduction is zero — basicPay already only covers days worked
-    const absentDeduction    = 0;
+    const absentDeduction    = 0; // already reflected in daysWorked
     const lateDeduction      = lateMinutes * minuteRate;
     const undertimeDeduction = undertimeMinutes * minuteRate;
 
     // OT and special pay premiums (PH Labor Code)
-    const overtimePay       = overtimeHours * hourlyRate * 1.25;       // +25%
-    const regularHolidayPay = regularHolidayHours * hourlyRate * 2.0;  // 200%
-    const specialHolidayPay = specialHolidayHours * hourlyRate * 1.3;  // 130%
-    const nightDiffPay      = nightDiffHours * hourlyRate * 0.10;      // +10% premium
-    const restDayPay        = restDayHours * hourlyRate * 1.3;         // 130%
+    const overtimePay       = overtimeHours * hourlyRate * 1.25;      // +25%
+    const regularHolidayPay = regularHolidayHours * hourlyRate * 2.0; // 200%
+    const specialHolidayPay = specialHolidayHours * hourlyRate * 1.3; // 130%
+    const nightDiffPay      = nightDiffHours * hourlyRate * 0.10;     // +10% night diff premium
+    const restDayPay        = restDayHours * hourlyRate * 1.3;        // 130%
 
-    const thirteenthMonthAccrued = monthlyEquivalent / 12;
+    const thirteenthMonthAccrued = monthlyBasic / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
 
-    // Gross pay = basic + all additions + de minimis (both exempt and taxable excess)
     const grossPay = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
-        + nightDiffPay + restDayPay + allowance + totalDeMinimis;
+        + nightDiffPay + restDayPay + allowance + otherBenefits + totalDeMinimis;
 
-    const sssContribution = await computeSSSContribution(monthlyEquivalent);
-    const philhealthContribution = await computePhilHealthContribution(monthlyEquivalent);
-    const pagibigContribution = await computePagIBIGContribution(monthlyEquivalent);
-    const totalContributions = sssContribution + philhealthContribution + pagibigContribution;
+    // Contributions are based on full monthly basic salary (BIR / SSS / PhilHealth / Pag-IBIG rules)
+    const sssContribution        = await computeSSSContribution(monthlyBasic);
+    const philhealthContribution = await computePhilHealthContribution(monthlyBasic);
+    const pagibigContribution    = await computePagIBIGContribution(monthlyBasic);
+    const totalContributions     = sssContribution + philhealthContribution + pagibigContribution;
 
-    // Taxable compensation excludes de minimis exempt portion (BIR RR 5-2011)
-    const periodCompensationForTax = basicPay + overtimePay + regularHolidayPay + specialHolidayPay
-        + nightDiffPay + restDayPay + allowance + deMinimisExcess;
-    const taxablePerPeriod = Math.max(0, periodCompensationForTax - totalContributions);
-    const annualTaxable = taxablePerPeriod * totalPeriodsYear;
-    const annualTax = await computeWithholdingTax(annualTaxable);
-    const withholdingTax = Math.max(0, annualTax / totalPeriodsYear);
+    // BIR annualized withholding tax method (RR 2-98 as amended by TRAIN Law)
+    // Step 1: monthly taxable compensation = monthly basic + taxable extras - monthly contributions
+    //   - De minimis exempt portion is non-taxable
+    //   - Other benefits and allowance are taxable compensation
+    const monthlyCompensation = monthlyBasic + (rawAllowance / 1) + (rawOtherBenefits / 1) + deMinimisExcess;
+    const monthlyTaxable      = Math.max(0, monthlyCompensation - totalContributions);
+    // Step 2: annualize and apply tax brackets
+    const annualTaxable = monthlyTaxable * 12;
+    const annualTax     = await computeWithholdingTax(annualTaxable);
+    // Step 3: prorate to pay period
+    const periodsPerMonth: Record<PayFrequency, number> = {
+        monthly: 1, 'semi-monthly': 2, 'bi-weekly': 2.1667, weekly: 4.3333,
+    };
+    const withholdingTax = Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
 
     const totalDeductions = totalContributions + withholdingTax
         + absentDeduction + lateDeduction + undertimeDeduction;
@@ -3391,7 +3401,7 @@ export const computeEmployeePayroll = async (params: {
         philhealthContribution,
         pagibigContribution,
         totalContributions,
-        taxableIncome: taxablePerPeriod,
+        taxableIncome: monthlyTaxable,
         withholdingTax,
         sssLoan: 0,
         pagibigLoan: 0,
@@ -3725,6 +3735,7 @@ export const generatePayrollForPeriod = async (
             nightDiffHours: attendance.nightDiffHours,
             restDayHours: attendance.restDayHours,
             allowance: latestSalary.allowance,
+            otherBenefits: latestSalary.otherBenefits ?? 0,
             payFrequency: period.payFrequency,
         });
         const saved = await upsertPayrollRecord(computed);
