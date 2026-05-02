@@ -3049,8 +3049,8 @@ export const analyzeAttendanceForPayroll = async (params: {
 }): Promise<AttendanceAnalysis> => {
     const { employeeId, periodStart, periodEnd, shift, workSchedule, gracePeriodMinutes, holidays } = params;
 
-    // Fetch attendance records and approved OT requests in parallel
-    const [{ data: rawRecords }, { data: rawRequests }] = await Promise.all([
+    // Fetch attendance records, approved OT requests, and approved leave in parallel
+    const [{ data: rawRecords }, { data: rawOTRequests }, { data: rawLeaveRequests }] = await Promise.all([
         supabase
             .from('attendance_records')
             .select('*')
@@ -3065,11 +3065,19 @@ export const analyzeAttendanceForPayroll = async (params: {
             .eq('status', 'Approved')
             .gte('date', periodStart)
             .lte('date', periodEnd),
+        supabase
+            .from('requests')
+            .select('*')
+            .eq('employee_id', employeeId)
+            .eq('request_type', 'Leave')
+            .eq('status', 'Approved')
+            .lte('start_date', periodEnd)
+            .gte('end_date', periodStart),
     ]);
 
     // Approved OT requests keyed by date — hours and optional holiday type
     const approvedOT: Record<string, { hours: number; holidayType?: string }> = {};
-    for (const r of (rawRequests ?? [])) {
+    for (const r of (rawOTRequests ?? [])) {
         const date = r.date as string;
         const prev = approvedOT[date];
         const hrs = parseFloat(r.hours ?? 0);
@@ -3077,6 +3085,14 @@ export const analyzeAttendanceForPayroll = async (params: {
             hours: (prev?.hours ?? 0) + hrs,
             holidayType: r.holiday_type ?? prev?.holidayType,
         };
+    }
+
+    // Build a set of dates covered by approved leave — no absent deduction on these days
+    const approvedLeaveDates = new Set<string>();
+    for (const r of (rawLeaveRequests ?? [])) {
+        for (const d of dateRange(r.start_date, r.end_date)) {
+            if (d >= periodStart && d <= periodEnd) approvedLeaveDates.add(d);
+        }
     }
 
     const records: { date: string; clockInMin: number; clockOutMin: number | null }[] =
@@ -3130,7 +3146,8 @@ export const analyzeAttendanceForPayroll = async (params: {
         const attended = byDate[date];
 
         if (!attended) {
-            if (isWorkDay && !holidayType) absentDays += 1;
+            // Only deduct as absent if it's a working day, not a holiday, and not covered by approved leave
+            if (isWorkDay && !holidayType && !approvedLeaveDates.has(date)) absentDays += 1;
             continue;
         }
 
