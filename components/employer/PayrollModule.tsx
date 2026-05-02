@@ -36,7 +36,7 @@ interface PayrollBreakdownModalProps {
 
 const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, periodName, payFrequency, onClose }) => {
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
-    const dailyRate = r.basicSalary / 22;
+    const dailyRate = r.dailyRate;
     const hourlyRate = dailyRate / 8;
     const minuteRate = hourlyRate / 60;
     const scheduledWorkDays = r.daysWorked + r.absentDays;
@@ -45,7 +45,7 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
 
     const earningsRows: Row[] = [
         { label: 'Monthly Basic Salary', formula: `Given`, value: r.basicSalary, bold: true },
-        { label: 'Daily Rate', formula: `₱${r.basicSalary.toFixed(2)} ÷ 22 working days`, value: dailyRate, indent: true },
+        { label: 'Daily Rate', formula: `₱${r.basicSalary.toFixed(2)} × 12 ÷ 52 wks ÷ work days/wk`, value: dailyRate, indent: true },
         { label: 'Hourly Rate', formula: `${fmt(dailyRate)} ÷ 8 hrs`, value: hourlyRate, indent: true },
         { label: 'Scheduled Work Days', formula: `Days worked (${r.daysWorked}) + Absent days (${r.absentDays})`, value: scheduledWorkDays, indent: true },
         { label: 'Basic Pay', formula: `${fmt(dailyRate)} × ${scheduledWorkDays} sched days`, value: r.basicPay, bold: true, color: 'text-blue-700' },

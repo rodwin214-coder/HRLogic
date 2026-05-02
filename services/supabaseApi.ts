@@ -3318,6 +3318,7 @@ export const computeEmployeePayroll = async (params: {
     deMinimisExempt?: number;
     deMinimisExcess?: number;
     payFrequency: PayFrequency;
+    workSchedule?: WorkSchedule;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3330,6 +3331,7 @@ export const computeEmployeePayroll = async (params: {
         otherBenefits: rawOtherBenefits = 0,
         deMinimisExempt = 0, deMinimisExcess = 0,
         payFrequency,
+        workSchedule = WorkSchedule.MONDAY_TO_FRIDAY,
     } = params;
 
     // Allowance and other benefits split in half for semi-monthly (monthly amount ÷ 2)
@@ -3338,7 +3340,9 @@ export const computeEmployeePayroll = async (params: {
     const otherBenefits = rawOtherBenefits / benefitDivisor;
 
     const monthlyBasic = basicSalary;
-    const dailyRate    = monthlyBasic / 22;
+    // Daily rate per DOLE formula: monthly × 12 ÷ 52 ÷ working days per week
+    const workDaysPerWeek = workingDayNumbers(workSchedule).length;
+    const dailyRate    = (monthlyBasic * 12) / 52 / workDaysPerWeek;
     const hourlyRate   = dailyRate / 8;
     const minuteRate   = hourlyRate / 60;
 
@@ -3776,6 +3780,7 @@ export const generatePayrollForPeriod = async (
             allowance: latestSalary.allowance,
             otherBenefits: latestSalary.otherBenefits ?? 0,
             payFrequency: period.payFrequency,
+            workSchedule: empSchedule,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);
