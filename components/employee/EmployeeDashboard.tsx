@@ -1,7 +1,8 @@
 import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { UserContext } from '../../App';
 import * as api from '../../services/supabaseApi';
-import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, EmployeeStatus, Task, TaskStatus, Employee, CompanyProfile } from '../../types';
+import { AppRequest, AttendanceRecord, LeaveType, RequestType, RequestStatus, LeaveBalance, EmploymentType, EmployeeStatus, Task, TaskStatus, Employee, CompanyProfile, PayrollPeriod, PayrollRecord } from '../../types';
+import { generatePayslipHTML, openPayslip } from '../../services/payslipUtils';
 import ClockInOut from './ClockInOut';
 import Modal from '../common/Modal';
 import HolidayCalendar from '../employer/HolidayCalendar';
@@ -331,7 +332,7 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     return <span className={`status-badge ${statusClasses[status]}`}>{status}</span>;
 }
 
-type RightPaneTab = 'profile' | 'tasks' | 'requests' | 'calendar' | 'reports';
+type RightPaneTab = 'profile' | 'tasks' | 'requests' | 'calendar' | 'reports' | 'payslips';
 
 const EmployeeDashboard: React.FC = () => {
     const { user, logout, refreshUser } = useContext(UserContext);
@@ -343,20 +344,23 @@ const EmployeeDashboard: React.FC = () => {
     const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
     const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
     const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+    const [payslips, setPayslips] = useState<{ period: PayrollPeriod; record: PayrollRecord }[]>([]);
 
     const fetchData = useCallback(async () => {
         if (user) {
-            const [requestsData, attendanceData, leaveBalanceData, companyProfileData] = await Promise.all([
+            const [requestsData, attendanceData, leaveBalanceData, companyProfileData, payslipsData] = await Promise.all([
                 api.getRequests(),
                 api.getTodaysAttendance(user.id),
                 api.calculateLeaveBalance(user.id),
-                api.getCompanyProfile()
+                api.getCompanyProfile(),
+                api.getEmployeePayslips(user.id),
             ]);
 
             setRequests(requestsData.filter(r => r.employeeId === user.id).sort((a,b) => new Date(b.dateFiled).getTime() - new Date(a.dateFiled).getTime()));
             setTodaysRecord(attendanceData);
             setLeaveBalance(leaveBalanceData);
             setCompanyProfile(companyProfileData);
+            setPayslips(payslipsData);
         }
     }, [user]);
 
@@ -483,6 +487,7 @@ const EmployeeDashboard: React.FC = () => {
                             <TabButton tabId="requests">My Requests</TabButton>
                             <TabButton tabId="calendar">Company Calendar</TabButton>
                             <TabButton tabId="reports">My Reports</TabButton>
+                            <TabButton tabId="payslips">My Payslips</TabButton>
                         </nav>
                     </div>
                     
@@ -534,6 +539,72 @@ const EmployeeDashboard: React.FC = () => {
 
                     <div className={activeRightTab === 'reports' ? '' : 'hidden'}>
                         <EmployeeReport />
+                    </div>
+
+                    <div className={activeRightTab === 'payslips' ? '' : 'hidden'}>
+                        <div className="card">
+                            <h2 className="text-xl font-bold text-slate-800 mb-1">My Payslips</h2>
+                            <p className="text-sm text-slate-500 mb-4">Payslips from finalized pay runs. Click Download to open and print as PDF.</p>
+                            {payslips.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    <p className="text-sm">No payslips available yet.</p>
+                                    <p className="text-xs mt-1">Payslips appear here once your employer finalizes a pay run.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pay Period</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pay Date</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Gross Pay</th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net Pay</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {payslips.map(({ period, record }) => (
+                                                <tr key={period.id} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{period.periodName}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-500">{period.payDate}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-700 text-right font-mono">
+                                                        {'₱' + record.grossPay.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm font-semibold text-green-700 text-right font-mono">
+                                                        {'₱' + record.netPay.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${period.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                                                            {period.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <button
+                                                            onClick={() => openPayslip(generatePayslipHTML(
+                                                                record,
+                                                                `${user.firstName} ${user.lastName}`,
+                                                                user.employeeId ?? '',
+                                                                user.department ?? '',
+                                                                period.periodName,
+                                                                period.payDate,
+                                                                companyProfile,
+                                                                period.payFrequency,
+                                                            ))}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                            Download
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

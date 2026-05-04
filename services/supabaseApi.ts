@@ -3699,6 +3699,37 @@ export const getPayrollRecords = async (periodId: string): Promise<PayrollRecord
     }
 };
 
+export const getEmployeePayslips = async (employeeId: string): Promise<{ period: PayrollPeriod; record: PayrollRecord }[]> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) return [];
+        const { data: periods, error: pErr } = await supabase
+            .from('payroll_periods')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .in('status', ['Finalized', 'Paid'])
+            .order('period_start', { ascending: false });
+        if (pErr) throw pErr;
+        if (!periods || periods.length === 0) return [];
+
+        const { data: records, error: rErr } = await supabase
+            .from('payroll_records')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .eq('employee_id', employeeId)
+            .in('period_id', periods.map((p: any) => p.id));
+        if (rErr) throw rErr;
+
+        const recordMap = new Map((records ?? []).map((r: any) => [r.period_id, dbRecordToPayrollRecord(r)]));
+        return periods
+            .map((p: any) => ({ period: dbPeriodToPayrollPeriod(p), record: recordMap.get(p.id) }))
+            .filter((x): x is { period: PayrollPeriod; record: PayrollRecord } => !!x.record);
+    } catch (err) {
+        console.error('getEmployeePayslips error:', err);
+        return [];
+    }
+};
+
 export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Promise<PayrollRecord | null> => {
     try {
         const { data, error } = await supabase.rpc('upsert_payroll_record', {
