@@ -3650,20 +3650,54 @@ export const createPayrollPeriod = async (period: {
 export const updatePayrollPeriodStatus = async (periodId: string, status: PayrollStatus): Promise<void> => {
     try {
         if (!currentCompanyId) return;
+        await ensureUserContext();
         await supabase.rpc('update_payroll_period_status', {
             p_period_id:  periodId,
             p_company_id: currentCompanyId,
             p_status:     status,
         });
         if (status === 'Paid') {
-            await ensureUserContext();
             await supabase
                 .from('payroll_records')
                 .update({ status: 'Paid', updated_at: new Date().toISOString() })
                 .eq('period_id', periodId);
         }
+        if (status === 'Draft' || status === 'Finalized') {
+            await supabase
+                .from('payroll_records')
+                .update({ status: 'Draft', updated_at: new Date().toISOString() })
+                .eq('period_id', periodId);
+        }
     } catch (err) {
         console.error('updatePayrollPeriodStatus error:', err);
+    }
+};
+
+export const markEmployeesPaid = async (periodId: string, employeeIds: string[]): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId || employeeIds.length === 0) return;
+        await supabase
+            .from('payroll_records')
+            .update({ status: 'Paid', updated_at: new Date().toISOString() })
+            .eq('period_id', periodId)
+            .in('employee_id', employeeIds);
+
+        // If all records in this period are now Paid, mark the period itself as Paid
+        const { data: remaining } = await supabase
+            .from('payroll_records')
+            .select('id')
+            .eq('period_id', periodId)
+            .neq('status', 'Paid');
+        if (!remaining || remaining.length === 0) {
+            await supabase.rpc('update_payroll_period_status', {
+                p_period_id:  periodId,
+                p_company_id: currentCompanyId,
+                p_status:     'Paid',
+            });
+        }
+    } catch (err) {
+        console.error('markEmployeesPaid error:', err);
     }
 };
 

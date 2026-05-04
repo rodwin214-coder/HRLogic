@@ -9,7 +9,7 @@ import {
     getPayrollRecords, upsertPayrollRecord, generatePayrollForPeriod,
     getPayrollAdjustments, addPayrollAdjustment, computeEmployeePayroll,
     getDeMinimisForPeriodEmployee, upsertDeMinimisItem, deleteDeMinimisItem,
-    DE_MINIMIS_CEILINGS,
+    DE_MINIMIS_CEILINGS, markEmployeesPaid,
     getEmployees, getShifts, getHolidays, getCompanyProfile,
 } from '../../services/supabaseApi';
 import { generatePayslipHTML, openPayslip } from '../../services/payslipUtils';
@@ -1081,9 +1081,10 @@ interface PeriodDetailProps {
     employees: Employee[];
     onBack: () => void;
     onStatusChange: (status: PayrollStatus) => void;
+    onPeriodPaid: () => void;
 }
 
-const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, onStatusChange }) => {
+const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, onStatusChange, onPeriodPaid }) => {
     const [records, setRecords] = useState<PayrollRecord[]>([]);
     const [adjustments, setAdjustments] = useState<PayrollAdjustment[]>([]);
     const [shifts, setShifts] = useState<Shift[]>([]);
@@ -1093,12 +1094,14 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
     const [employerShouldersContributions, setEmployerShouldersContributions] = useState(false);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
+    const [markingPaid, setMarkingPaid] = useState(false);
     const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
     const [breakdownRecord, setBreakdownRecord] = useState<PayrollRecord | null>(null);
     const [showAdjModal, setShowAdjModal] = useState(false);
     const [tab, setTab] = useState<'records' | 'adjustments' | 'summary' | 'reports'>('records');
     const [company, setCompany] = useState<CompanyProfile | null>(null);
     const [search, setSearch] = useState('');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const empMap = new Map(employees.map(e => [e.id, e]));
 
@@ -1146,6 +1149,35 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
         return name.includes(search.toLowerCase());
     });
 
+    const unpaidRecords = filteredRecords.filter(r => (r as any).status !== 'Paid');
+    const allUnpaidSelected = unpaidRecords.length > 0 && unpaidRecords.every(r => selectedIds.has(r.employeeId));
+
+    const toggleEmployee = (employeeId: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(employeeId) ? next.delete(employeeId) : next.add(employeeId);
+            return next;
+        });
+    };
+
+    const toggleAll = () => {
+        if (allUnpaidSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(unpaidRecords.map(r => r.employeeId)));
+        }
+    };
+
+    const handleMarkSelectedPaid = async () => {
+        if (selectedIds.size === 0) return;
+        setMarkingPaid(true);
+        await markEmployeesPaid(period.id, Array.from(selectedIds));
+        setSelectedIds(new Set());
+        await loadData();
+        onPeriodPaid();
+        setMarkingPaid(false);
+    };
+
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
     const totalNet = records.reduce((s, r) => s + r.netPay, 0);
     const totalSSS = records.reduce((s, r) => s + r.sssContribution, 0);
@@ -1181,16 +1213,16 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     </button>
                 )}
                 {period.status === 'Finalized' && (
-                    <>
-                        <button onClick={() => onStatusChange('Draft')}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                            Revert to Draft
-                        </button>
-                        <button onClick={() => onStatusChange('Paid')}
-                            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">
-                            Mark Paid
-                        </button>
-                    </>
+                    <button onClick={() => onStatusChange('Draft')}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Revert to Draft
+                    </button>
+                )}
+                {period.status === 'Paid' && (
+                    <button onClick={() => onStatusChange('Finalized')}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Revert to Finalized
+                    </button>
                 )}
             </div>
 
@@ -1234,6 +1266,19 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                             </button>
                         )}
                     </div>
+                    {/* Mark Selected Paid action bar — only shown in Finalized mode */}
+                    {period.status === 'Finalized' && selectedIds.size > 0 && (
+                        <div className="flex items-center justify-between mb-3 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+                            <span className="text-sm font-medium text-green-800">{selectedIds.size} employee{selectedIds.size !== 1 ? 's' : ''} selected</span>
+                            <button
+                                onClick={handleMarkSelectedPaid}
+                                disabled={markingPaid}
+                                className="px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-60"
+                            >
+                                {markingPaid ? 'Processing…' : `Mark ${selectedIds.size === unpaidRecords.length ? 'All' : 'Selected'} as Paid`}
+                            </button>
+                        </div>
+                    )}
                     {filteredRecords.length === 0 ? (
                         <div className="text-center py-16 text-gray-400">
                             <p className="text-lg">No payroll records yet.</p>
@@ -1244,6 +1289,16 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                     <tr>
+                                        {period.status === 'Finalized' && (
+                                            <th className="px-3 py-3 w-8">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allUnpaidSelected}
+                                                    onChange={toggleAll}
+                                                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                                />
+                                            </th>
+                                        )}
                                         {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
@@ -1254,8 +1309,24 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         const emp = empMap.get(r.employeeId);
                                         const holidayPay = r.regularHolidayPay + r.specialHolidayPay + r.restDayPay + r.nightDiffPay;
                                         const tardiness = r.lateDeduction + r.undertimeDeduction;
+                                        const isPaid = (r as any).status === 'Paid';
+                                        const isSelected = selectedIds.has(r.employeeId);
                                         return (
-                                            <tr key={r.id} className="hover:bg-gray-50">
+                                            <tr key={r.id} className={`hover:bg-gray-50 ${isPaid ? 'opacity-60' : ''}`}>
+                                                {period.status === 'Finalized' && (
+                                                    <td className="px-3 py-3">
+                                                        {isPaid ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-green-700 bg-green-100 rounded">Paid</span>
+                                                        ) : (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                onChange={() => toggleEmployee(r.employeeId)}
+                                                                className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                                            />
+                                                        )}
+                                                    </td>
+                                                )}
                                                 <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
                                                     {emp ? `${emp.lastName}, ${emp.firstName}` : r.employeeId}
                                                     <div className="text-xs text-gray-400">{emp?.department}</div>
@@ -1510,6 +1581,7 @@ const PayrollModule: React.FC = () => {
                 employees={employees}
                 onBack={() => { setSelectedPeriod(null); loadAll(); }}
                 onStatusChange={s => handleStatusChange(selectedPeriod, s)}
+                onPeriodPaid={loadAll}
             />
         );
     }
