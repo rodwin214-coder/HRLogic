@@ -3098,15 +3098,22 @@ export const analyzeAttendanceForPayroll = async (params: {
             .gte('end_date', periodStart),
     ]);
 
-    // Approved OT requests keyed by date — hours and optional holiday type
+    // Build holiday lookup by date for fallback resolution
+    const holidayByDate: Record<string, string> = {};
+    for (const h of holidays) {
+        holidayByDate[h.date] = h.type;
+    }
+
+    // Approved OT requests keyed by date — hours and holiday type (from request or holidays table)
     const approvedOT: Record<string, { hours: number; holidayType?: string }> = {};
     for (const r of (rawOTRequests ?? [])) {
         const date = r.date as string;
         const prev = approvedOT[date];
         const hrs = parseFloat(r.hours ?? 0);
+        const holidayType = r.holiday_type ?? holidayByDate[date] ?? prev?.holidayType;
         approvedOT[date] = {
             hours: (prev?.hours ?? 0) + hrs,
-            holidayType: r.holiday_type ?? prev?.holidayType,
+            holidayType,
         };
     }
 
