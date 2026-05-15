@@ -814,15 +814,20 @@ const AddAdjustmentModal: React.FC<AddAdjustmentModalProps> = ({ periodId, emplo
     const handleSave = async () => {
         if (!form.employeeId || !form.amount) { setError('Employee and amount are required.'); return; }
         setSaving(true);
-        await addPayrollAdjustment({
-            periodId,
-            employeeId: form.employeeId,
-            adjustmentType: form.adjustmentType,
-            amount: parseFloat(form.amount),
-            description: form.description,
-        });
-        setSaving(false);
-        onSave();
+        setError('');
+        try {
+            await addPayrollAdjustment({
+                periodId,
+                employeeId: form.employeeId,
+                adjustmentType: form.adjustmentType,
+                amount: parseFloat(form.amount),
+                description: form.description,
+            });
+            onSave();
+        } catch (err: any) {
+            setError(err?.message ?? 'Failed to save adjustment.');
+            setSaving(false);
+        }
     };
 
     return (
