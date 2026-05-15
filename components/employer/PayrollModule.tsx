@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     PayrollPeriod, PayrollRecord, PayrollAdjustment, PayFrequency,
     PayrollStatus, AdjustmentType, Employee, DeMinimisItem, DeMinimisType,
@@ -407,35 +407,61 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
     const totalExempt = deMinimisItems.reduce((s, i) => s + i.exemptAmount, 0);
     const totalExcess = deMinimisItems.reduce((s, i) => s + i.taxableExcess, 0);
 
-    const setN = (k: keyof PayrollRecord, v: string) =>
-        setForm(prev => ({ ...prev, [k]: parseFloat(v) || 0 }));
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const formRef = useRef(form);
+    formRef.current = form;
+    const totalExemptRef = useRef(totalExempt);
+    totalExemptRef.current = totalExempt;
+    const totalExcessRef = useRef(totalExcess);
+    totalExcessRef.current = totalExcess;
 
-    const recompute = async () => {
+    const ATTENDANCE_KEYS: (keyof PayrollRecord)[] = [
+        'absentDays', 'lateMinutes', 'undertimeMinutes',
+        'overtimeHours', 'regularHolidayHours', 'specialHolidayHours',
+        'nightDiffHours', 'restDayHours', 'daysWorked',
+        'allowance', 'otherBenefits', 'basicSalary',
+    ];
+
+    const recompute = useCallback(async (currentForm: typeof form, exempt: number, excess: number) => {
         setComputing(true);
         const computed = await computeEmployeePayroll({
-            employeeId: form.employeeId,
-            companyId: form.companyId,
-            periodId: form.periodId,
-            basicSalary: form.basicSalary,
-            scheduledWorkDays: form.daysWorked + form.absentDays,
-            daysWorked: form.daysWorked,
-            hoursWorked: form.hoursWorked,
-            absentDays: form.absentDays,
-            lateMinutes: form.lateMinutes,
-            undertimeMinutes: form.undertimeMinutes,
-            overtimeHours: form.overtimeHours,
-            regularHolidayHours: form.regularHolidayHours,
-            specialHolidayHours: form.specialHolidayHours,
-            nightDiffHours: form.nightDiffHours,
-            restDayHours: form.restDayHours,
-            allowance: form.allowance,
-            otherBenefits: (form as any).otherBenefits ?? 0,
-            deMinimisExempt: totalExempt,
-            deMinimisExcess: totalExcess,
+            employeeId: currentForm.employeeId,
+            companyId: currentForm.companyId,
+            periodId: currentForm.periodId,
+            basicSalary: currentForm.basicSalary,
+            scheduledWorkDays: currentForm.daysWorked + currentForm.absentDays,
+            daysWorked: currentForm.daysWorked,
+            hoursWorked: currentForm.hoursWorked,
+            absentDays: currentForm.absentDays,
+            lateMinutes: currentForm.lateMinutes,
+            undertimeMinutes: currentForm.undertimeMinutes,
+            overtimeHours: currentForm.overtimeHours,
+            regularHolidayHours: currentForm.regularHolidayHours,
+            specialHolidayHours: currentForm.specialHolidayHours,
+            nightDiffHours: currentForm.nightDiffHours,
+            restDayHours: currentForm.restDayHours,
+            allowance: currentForm.allowance,
+            otherBenefits: (currentForm as any).otherBenefits ?? 0,
+            deMinimisExempt: exempt,
+            deMinimisExcess: excess,
             payFrequency: period.payFrequency,
         });
         setForm(prev => ({ ...prev, ...computed, id: prev.id }));
         setComputing(false);
+    }, [period.payFrequency]);
+
+    const setN = (k: keyof PayrollRecord, v: string) => {
+        const val = parseFloat(v) || 0;
+        setForm(prev => {
+            const next = { ...prev, [k]: val };
+            if (ATTENDANCE_KEYS.includes(k)) {
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => {
+                    recompute(next, totalExemptRef.current, totalExcessRef.current);
+                }, 600);
+            }
+            return next;
+        });
     };
 
     const handleAddDeMinimis = async () => {
@@ -654,7 +680,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                     <div className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="text-sm font-semibold text-gray-800">Computed Summary</h3>
-                            <button onClick={recompute} disabled={computing}
+                            <button onClick={() => recompute(formRef.current, totalExemptRef.current, totalExcessRef.current)} disabled={computing}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50">
                                 {computing ? 'Computing…' : '↻ Recompute'}
                             </button>
