@@ -37,10 +37,11 @@ interface PayrollBreakdownModalProps {
     payDate: string;
     payFrequency: PayFrequency;
     company: CompanyProfile | null;
+    employerShouldersContributions?: boolean;
     onClose: () => void;
 }
 
-const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, onClose }) => {
+const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, employerShouldersContributions = false, onClose }) => {
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const dailyRate = r.dailyRate;
     const hourlyRate = dailyRate / 8;
@@ -124,9 +125,24 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
     const annualTaxable = taxableIncome * 12;
 
     const contribRows: Row[] = [
-        { label: 'SSS Contribution', formula: benefitDivisor > 1 ? `Monthly SSS ÷ ${benefitDivisor}` : 'Based on monthly salary bracket', value: -r.sssContribution, color: 'text-red-600' },
-        { label: 'PhilHealth Contribution', formula: benefitDivisor > 1 ? `Monthly PhilHealth ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.philhealthContribution, color: 'text-red-600' },
-        { label: 'Pag-IBIG Contribution', formula: benefitDivisor > 1 ? `Monthly Pag-IBIG ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.pagibigContribution, color: 'text-red-600' },
+        {
+            label: `SSS${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
+            formula: benefitDivisor > 1 ? `Monthly SSS ÷ ${benefitDivisor}` : 'Based on monthly salary bracket',
+            value: employerShouldersContributions ? 0 : -r.sssContribution,
+            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
+        },
+        {
+            label: `PhilHealth${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
+            formula: benefitDivisor > 1 ? `Monthly PhilHealth ÷ ${benefitDivisor}` : 'Based on monthly salary',
+            value: employerShouldersContributions ? 0 : -r.philhealthContribution,
+            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
+        },
+        {
+            label: `Pag-IBIG${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
+            formula: benefitDivisor > 1 ? `Monthly Pag-IBIG ÷ ${benefitDivisor}` : 'Based on monthly salary',
+            value: employerShouldersContributions ? 0 : -r.pagibigContribution,
+            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
+        },
     ];
 
     const taxRows: Row[] = [
@@ -228,7 +244,7 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
 
                 <div className="flex justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
                     <button
-                        onClick={() => openPayslip(generatePayslipHTML(r, employeeName, employeeId, department, periodName, payDate, company, payFrequency))}
+                        onClick={() => openPayslip(generatePayslipHTML(r, employeeName, employeeId, department, periodName, payDate, company, payFrequency, employerShouldersContributions))}
                         className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         Export / Print Payslip
@@ -821,9 +837,10 @@ interface PayrollReportsProps {
     period: PayrollPeriod;
     company: CompanyProfile | null;
     empMap: Map<string, Employee>;
+    employerShouldersContributions?: boolean;
 }
 
-const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap }) => {
+const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap, employerShouldersContributions = false }) => {
     const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'payslips-all'>('payroll-register');
 
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
@@ -964,7 +981,7 @@ ${htmlBody}
         const allHTML = records.map(r => {
             const e = empMap.get(r.employeeId);
             const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
-            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency);
+            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, employerShouldersContributions);
         });
         const combined = allHTML.map((h, i) =>
             `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE[\s\S]*?<body[^>]*>/i, '').replace('</body></html>', '')}</div>`
@@ -1299,7 +1316,11 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 />
                                             </th>
                                         )}
-                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis', 'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
+                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis', 'Gross',
+                                            employerShouldersContributions ? 'SSS (ER)' : 'SSS',
+                                            employerShouldersContributions ? 'PhilHealth (ER)' : 'PhilHealth',
+                                            employerShouldersContributions ? 'Pag-IBIG (ER)' : 'Pag-IBIG',
+                                            'W/Tax', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -1341,9 +1362,15 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 <td className="px-3 py-3 text-green-700">{r.otherBenefits > 0 ? fmt(r.otherBenefits) : '—'}</td>
                                                 <td className="px-3 py-3 text-green-700">{r.deMinimis > 0 ? fmt(r.deMinimis) : '—'}</td>
                                                 <td className="px-3 py-3 font-medium text-gray-900">{fmt(r.grossPay)}</td>
-                                                <td className="px-3 py-3 text-red-600">{fmt(r.sssContribution)}</td>
-                                                <td className="px-3 py-3 text-red-600">{fmt(r.philhealthContribution)}</td>
-                                                <td className="px-3 py-3 text-red-600">{fmt(r.pagibigContribution)}</td>
+                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.sssContribution)}</span>
+                                                </td>
+                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.philhealthContribution)}</span>
+                                                </td>
+                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.pagibigContribution)}</span>
+                                                </td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.withholdingTax)}</td>
                                                 <td className="px-3 py-3">
                                                     <button
@@ -1363,7 +1390,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                         <button
                                                             onClick={() => {
                                                                 const emp = empMap.get(r.employeeId);
-                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency));
+                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, employerShouldersContributions));
                                                             }}
                                                             className="text-xs text-gray-500 hover:text-gray-800 font-medium"
                                                             title="Export payslip">
@@ -1447,42 +1474,81 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                 </div>
             ) : tab === 'summary' ? (
                 /* Government Contributions Summary */
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {[
-                            { name: 'SSS', total: totalSSS, employer: totalSSS * (9.5 / 4.5), employee: totalSSS, color: 'blue', desc: '4.5% employee · 9.5% employer (2024 rates)' },
-                            { name: 'PhilHealth', total: totalPH * 2, employer: totalPH, employee: totalPH, color: 'green', desc: '5% total premium · 50/50 split' },
-                            { name: 'Pag-IBIG', total: totalPIBIG * 2, employer: totalPIBIG, employee: totalPIBIG, color: 'orange', desc: '2% employee · 2% employer · Max ₱200' },
-                        ].map(c => (
-                            <div key={c.name} className={`rounded-xl border border-${c.color}-200 p-5`}>
-                                <h3 className={`text-base font-bold text-${c.color}-800 mb-1`}>{c.name}</h3>
-                                <p className="text-xs text-gray-500 mb-4">{c.desc}</p>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Employee Share:</span>
-                                        <span className="font-semibold text-red-600">{fmt(c.employee)}</span>
+                (() => {
+                    // 2025 rates: SSS EE 5% / ER 10% (ratio 2×), PhilHealth 50/50, Pag-IBIG 2%/2%
+                    const sssER   = totalSSS * 2;          // ER = 10% → 2× employee (5%)
+                    const phER    = totalPH;               // PhilHealth 50/50
+                    const piER    = totalPIBIG;            // Pag-IBIG 2%/2%
+
+                    // When employer shoulders: employee share in net pay = 0, but employer remits both shares
+                    const sssEE_display   = employerShouldersContributions ? 0 : totalSSS;
+                    const phEE_display    = employerShouldersContributions ? 0 : totalPH;
+                    const piEE_display    = employerShouldersContributions ? 0 : totalPIBIG;
+                    // Employer remits its own share + the employee share it shouldered
+                    const sssER_display   = employerShouldersContributions ? sssER + totalSSS : sssER;
+                    const phER_display    = employerShouldersContributions ? phER + totalPH   : phER;
+                    const piER_display    = employerShouldersContributions ? piER + totalPIBIG : piER;
+                    const sssTot  = sssEE_display + sssER_display;
+                    const phTot   = phEE_display  + phER_display;
+                    const piTot   = piEE_display  + piER_display;
+
+                    const contribs = [
+                        { name: 'SSS', employee: sssEE_display, employer: sssER_display, total: sssTot, color: 'blue',   desc: '5% employee · 10% employer (2025 rates)' },
+                        { name: 'PhilHealth', employee: phEE_display, employer: phER_display, total: phTot, color: 'green',  desc: '5% total premium · 50/50 split' },
+                        { name: 'Pag-IBIG', employee: piEE_display, employer: piER_display, total: piTot, color: 'orange', desc: '2% employee · 2% employer · Max ₱200/month' },
+                    ];
+
+                    return (
+                        <div className="space-y-6">
+                            {employerShouldersContributions && (
+                                <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <span>Employer-shoulders mode is active. Employee contributions are not deducted from net pay — the employer remits both shares.</span>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {contribs.map(c => (
+                                    <div key={c.name} className={`rounded-xl border border-${c.color}-200 p-5`}>
+                                        <h3 className={`text-base font-bold text-${c.color}-800 mb-1`}>{c.name}</h3>
+                                        <p className="text-xs text-gray-500 mb-4">{c.desc}</p>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Employee Share:</span>
+                                                <span className={`font-semibold ${employerShouldersContributions ? 'text-gray-400 line-through' : 'text-red-600'}`}>{fmt(c.employee)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Employer Share{employerShouldersContributions ? ' (incl. EE share)' : ''}:</span>
+                                                <span className="font-semibold text-gray-800">{fmt(c.employer)}</span>
+                                            </div>
+                                            <div className="border-t pt-2 flex justify-between text-sm font-bold">
+                                                <span>Total Remittance:</span>
+                                                <span className={`text-${c.color}-700`}>{fmt(c.total)}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Employer Share:</span>
-                                        <span className="font-semibold text-gray-800">{fmt(c.employer)}</span>
-                                    </div>
-                                    <div className="border-t pt-2 flex justify-between text-sm font-bold">
-                                        <span>Total Remittance:</span>
-                                        <span className={`text-${c.color}-700`}>{fmt(c.total)}</span>
-                                    </div>
+                                ))}
+                            </div>
+                            <div className="rounded-xl border border-gray-200 p-5">
+                                <h3 className="text-base font-bold text-gray-800 mb-1">BIR Withholding Tax</h3>
+                                <p className="text-xs text-gray-500 mb-4">TRAIN Law (RR 8-2018) · Annualized method</p>
+                                <div className="flex justify-between text-sm font-bold">
+                                    <span>Total Withheld this Period:</span>
+                                    <span className="text-red-700">{fmt(totalTax)}</span>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                    <div className="rounded-xl border border-gray-200 p-5">
-                        <h3 className="text-base font-bold text-gray-800 mb-1">BIR Withholding Tax</h3>
-                        <p className="text-xs text-gray-500 mb-4">TRAIN Law (RR 8-2018) · Annualized method · 2023 onwards rates</p>
-                        <div className="flex justify-between text-sm font-bold">
-                            <span>Total Withheld this Period:</span>
-                            <span className="text-red-700">{fmt(totalTax)}</span>
+                            <div className="rounded-xl border border-gray-200 p-5 bg-gray-50">
+                                <h3 className="text-base font-bold text-gray-800 mb-3">Total Employer Remittance Summary</h3>
+                                <div className="space-y-1.5 text-sm">
+                                    <div className="flex justify-between"><span className="text-gray-600">SSS (employer remittance):</span><span className="font-medium">{fmt(sssTot)}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">PhilHealth (employer remittance):</span><span className="font-medium">{fmt(phTot)}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">Pag-IBIG (employer remittance):</span><span className="font-medium">{fmt(piTot)}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">BIR Withholding Tax:</span><span className="font-medium">{fmt(totalTax)}</span></div>
+                                    <div className="border-t mt-2 pt-2 flex justify-between font-bold text-base"><span>Grand Total Remittance:</span><span>{fmt(sssTot + phTot + piTot + totalTax)}</span></div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    );
+                })()
             ) : (
                 /* ── Comprehensive Payroll Reports ── */
                 <PayrollReports
@@ -1491,6 +1557,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     period={period}
                     company={company}
                     empMap={empMap}
+                    employerShouldersContributions={employerShouldersContributions}
                 />
             )}
 
@@ -1506,6 +1573,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                         payDate={period.payDate}
                         payFrequency={period.payFrequency}
                         company={company}
+                        employerShouldersContributions={employerShouldersContributions}
                         onClose={() => setBreakdownRecord(null)}
                     />
                 );
