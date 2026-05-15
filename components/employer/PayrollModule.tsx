@@ -448,7 +448,18 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             payFrequency: period.payFrequency,
             employerShouldersContributions,
         });
-        setForm(prev => ({ ...prev, ...computed, id: prev.id }));
+        // Only update derived/computed fields — never overwrite user-editable inputs
+        const PRESERVE_KEYS: (keyof PayrollRecord)[] = [
+            'basicSalary', 'daysWorked', 'hoursWorked', 'absentDays',
+            'lateMinutes', 'undertimeMinutes', 'overtimeHours',
+            'regularHolidayHours', 'specialHolidayHours', 'nightDiffHours',
+            'restDayHours', 'allowance', 'otherBenefits',
+        ];
+        setForm(prev => {
+            const next = { ...prev, ...computed, id: prev.id };
+            for (const k of PRESERVE_KEYS) (next as any)[k] = (prev as any)[k];
+            return next;
+        });
         setComputing(false);
     }, [period.payFrequency, employerShouldersContributions]);
 
@@ -504,14 +515,34 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
         if (saved) onSave(saved);
     };
 
-    const field = (label: string, key: keyof PayrollRecord, readOnly = false) => (
-        <div>
-            <label className="block text-xs font-medium text-gray-600 mb-0.5">{label}</label>
-            <input type="number" value={Number(form[key]).toFixed(2)} readOnly={readOnly}
-                onChange={e => !readOnly && setN(key, e.target.value)}
-                className={`w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${readOnly ? 'bg-gray-50 text-gray-500' : ''}`} />
-        </div>
-    );
+    const [fieldStrings, setFieldStrings] = useState<Partial<Record<keyof PayrollRecord, string>>>({});
+
+    const field = (label: string, key: keyof PayrollRecord, readOnly = false) => {
+        const displayVal = readOnly
+            ? Number(form[key]).toFixed(2)
+            : (fieldStrings[key] ?? String(Number(form[key])));
+        return (
+            <div>
+                <label className="block text-xs font-medium text-gray-600 mb-0.5">{label}</label>
+                <input
+                    type="number"
+                    value={displayVal}
+                    readOnly={readOnly}
+                    onChange={e => {
+                        if (readOnly) return;
+                        setFieldStrings(prev => ({ ...prev, [key]: e.target.value }));
+                        setN(key, e.target.value);
+                    }}
+                    onBlur={e => {
+                        if (readOnly) return;
+                        const num = parseFloat(e.target.value) || 0;
+                        setFieldStrings(prev => ({ ...prev, [key]: String(num) }));
+                    }}
+                    className={`w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${readOnly ? 'bg-gray-50 text-gray-500' : ''}`}
+                />
+            </div>
+        );
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
