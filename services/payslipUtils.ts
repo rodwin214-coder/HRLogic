@@ -1,4 +1,6 @@
-import { PayrollRecord, PayFrequency, CompanyProfile } from '../types';
+import { PayrollRecord, PayFrequency, CompanyProfile, PayrollAdjustment } from '../types';
+
+const DEDUCTION_ADJUSTMENT_TYPES: PayrollAdjustment['adjustmentType'][] = ['sss_loan', 'pagibig_loan', 'cash_advance', 'other_deduction'];
 
 export const generatePayslipHTML = (
     r: PayrollRecord,
@@ -9,10 +11,17 @@ export const generatePayslipHTML = (
     payDate: string,
     company: CompanyProfile | null,
     payFrequency: PayFrequency,
+    adjustments: PayrollAdjustment[] = [],
 ): string => {
     const f = (n: number) => '₱' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const erShouldered = r.employerContributionsBenefit > 0;
+
+    const adjNet = adjustments.reduce((sum, a) => {
+        const sign = DEDUCTION_ADJUSTMENT_TYPES.includes(a.adjustmentType) ? -1 : 1;
+        return sum + sign * a.amount;
+    }, 0);
+    const totalNetPay = r.netPay + adjNet;
 
     const logoHTML = company?.logo
         ? `<img src="${company.logo}" style="height:56px;object-fit:contain;" />`
@@ -119,8 +128,20 @@ ${(r.sssLoan > 0 || r.pagibigLoan > 0 || r.cashAdvance > 0 || r.otherDeductions 
 </table>
 <hr class="divider"/>` : ''}
 
+<!-- Adjustments -->
+${adjustments.length > 0 ? `
+<table style="margin-top:8px;">
+  <tr><th colspan="2">Adjustments</th></tr>
+  ${adjustments.map(a => {
+      const isDeduction = DEDUCTION_ADJUSTMENT_TYPES.includes(a.adjustmentType);
+      const label = a.description || a.adjustmentType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return row(label, (isDeduction ? '-' : '+') + f(a.amount), isDeduction ? '#dc2626' : '#15803d');
+  }).join('')}
+</table>
+<hr class="divider"/>` : ''}
+
 <!-- Net Pay -->
-<div class="net-box"><span style="font-size:14px;font-weight:600;">NET PAY</span><span style="font-size:20px;font-weight:700;">${f(r.netPay)}</span></div>
+<div class="net-box"><span style="font-size:14px;font-weight:600;">NET PAY</span><span style="font-size:20px;font-weight:700;">${f(totalNetPay)}</span></div>
 
 ${r.thirteenthMonthAccrued > 0 ? `<div style="margin-top:10px;font-size:11px;color:#9ca3af;text-align:right;">13th Month Accrual this period: ${f(r.thirteenthMonthAccrued)}</div>` : ''}
 

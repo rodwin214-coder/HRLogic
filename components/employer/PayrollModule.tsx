@@ -1384,7 +1384,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         )}
                                         {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis',
                                             ...(employerShouldersContributions ? ['ER Contrib. Benefit'] : []),
-                                            'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
+                                            'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Other Adj.', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -1434,6 +1434,13 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.pagibigContribution)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.withholdingTax)}</td>
                                                 <td className="px-3 py-3">
+                                                    {(() => {
+                                                        const adjNet = adjustmentNetByEmployee.get(r.employeeId) ?? 0;
+                                                        if (adjNet === 0) return <span className="text-gray-400">—</span>;
+                                                        return <span className={adjNet > 0 ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>{adjNet > 0 ? '+' : ''}{fmt(adjNet)}</span>;
+                                                    })()}
+                                                </td>
+                                                <td className="px-3 py-3">
                                                     <button
                                                         onClick={() => setBreakdownRecord(r)}
                                                         className="font-bold text-green-700 hover:text-green-900 hover:underline tabular-nums text-left transition-colors"
@@ -1451,7 +1458,8 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                         <button
                                                             onClick={() => {
                                                                 const emp = empMap.get(r.employeeId);
-                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency));
+                                                                const empAdjs = adjustments.filter(a => a.employeeId === r.employeeId);
+                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, empAdjs));
                                                             }}
                                                             className="text-xs text-gray-500 hover:text-gray-800 font-medium"
                                                             title="Export payslip">
@@ -1483,6 +1491,13 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         <td className="px-3 py-3 text-red-700">{fmt(totalPH)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalPIBIG)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalTax)}</td>
+                                        <td className="px-3 py-3">
+                                            {(() => {
+                                                const totalAdj = records.reduce((s, r) => s + (adjustmentNetByEmployee.get(r.employeeId) ?? 0), 0);
+                                                if (totalAdj === 0) return <span className="text-gray-400">—</span>;
+                                                return <span className={totalAdj > 0 ? 'text-green-700' : 'text-red-700'}>{totalAdj > 0 ? '+' : ''}{fmt(totalAdj)}</span>;
+                                            })()}
+                                        </td>
                                         <td className="px-3 py-3 text-green-700">{fmt(totalNet)}</td>
                                         <td></td>
                                     </tr>

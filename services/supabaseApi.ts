@@ -3750,7 +3750,7 @@ export const getPayrollRecords = async (periodId: string): Promise<PayrollRecord
     }
 };
 
-export const getEmployeePayslips = async (employeeId: string): Promise<{ period: PayrollPeriod; record: PayrollRecord }[]> => {
+export const getEmployeePayslips = async (employeeId: string): Promise<{ period: PayrollPeriod; record: PayrollRecord; adjustments: PayrollAdjustment[] }[]> => {
     try {
         await ensureUserContext();
         if (!currentCompanyId) return [];
@@ -3763,18 +3763,26 @@ export const getEmployeePayslips = async (employeeId: string): Promise<{ period:
         if (pErr) throw pErr;
         if (!periods || periods.length === 0) return [];
 
-        const { data: records, error: rErr } = await supabase
-            .from('payroll_records')
-            .select('*')
-            .eq('company_id', currentCompanyId)
-            .eq('employee_id', employeeId)
-            .in('period_id', periods.map((p: any) => p.id));
+        const periodIds = periods.map((p: any) => p.id);
+
+        const [{ data: records, error: rErr }, { data: adjRows, error: aErr }] = await Promise.all([
+            supabase.from('payroll_records').select('*').eq('company_id', currentCompanyId).eq('employee_id', employeeId).in('period_id', periodIds),
+            supabase.from('payroll_adjustments').select('*').eq('company_id', currentCompanyId).eq('employee_id', employeeId).in('period_id', periodIds),
+        ]);
         if (rErr) throw rErr;
+        if (aErr) throw aErr;
 
         const recordMap = new Map((records ?? []).map((r: any) => [r.period_id, dbRecordToPayrollRecord(r)]));
+        const adjsByPeriod = new Map<string, PayrollAdjustment[]>();
+        for (const a of (adjRows ?? [])) {
+            const list = adjsByPeriod.get(a.period_id) ?? [];
+            list.push({ id: a.id, companyId: a.company_id, periodId: a.period_id, employeeId: a.employee_id, adjustmentType: a.adjustment_type, amount: Number(a.amount), description: a.description ?? '', createdAt: a.created_at });
+            adjsByPeriod.set(a.period_id, list);
+        }
+
         return periods
-            .map((p: any) => ({ period: dbPeriodToPayrollPeriod(p), record: recordMap.get(p.id) }))
-            .filter((x): x is { period: PayrollPeriod; record: PayrollRecord } => !!x.record);
+            .map((p: any) => ({ period: dbPeriodToPayrollPeriod(p), record: recordMap.get(p.id), adjustments: adjsByPeriod.get(p.id) ?? [] }))
+            .filter((x): x is { period: PayrollPeriod; record: PayrollRecord; adjustments: PayrollAdjustment[] } => !!x.record);
     } catch (err) {
         console.error('getEmployeePayslips error:', err);
         return [];

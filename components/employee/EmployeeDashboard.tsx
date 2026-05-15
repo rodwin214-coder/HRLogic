@@ -344,7 +344,7 @@ const EmployeeDashboard: React.FC = () => {
     const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
     const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
     const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
-    const [payslips, setPayslips] = useState<{ period: PayrollPeriod; record: PayrollRecord }[]>([]);
+    const [payslips, setPayslips] = useState<{ period: PayrollPeriod; record: PayrollRecord; adjustments: import('../../types').PayrollAdjustment[] }[]>([]);
 
     const fetchData = useCallback(async () => {
         if (user) {
@@ -565,7 +565,9 @@ const EmployeeDashboard: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {payslips.map(({ period, record }) => (
+                                            {payslips.map(({ period, record, adjustments }) => {
+                                                const adjNet = adjustments.reduce((s, a) => s + (['sss_loan','pagibig_loan','cash_advance','other_deduction'].includes(a.adjustmentType) ? -1 : 1) * a.amount, 0);
+                                                return (
                                                 <tr key={period.id} className="hover:bg-gray-50 transition-colors">
                                                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{period.periodName}</td>
                                                     <td className="px-4 py-3 text-sm text-gray-500">{period.payDate}</td>
@@ -573,7 +575,7 @@ const EmployeeDashboard: React.FC = () => {
                                                         {'₱' + record.grossPay.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                                     </td>
                                                     <td className="px-4 py-3 text-sm font-semibold text-green-700 text-right font-mono">
-                                                        {'₱' + record.netPay.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                                        {'₱' + (record.netPay + adjNet).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
                                                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${period.status === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
@@ -591,6 +593,7 @@ const EmployeeDashboard: React.FC = () => {
                                                                 period.payDate,
                                                                 companyProfile,
                                                                 period.payFrequency,
+                                                                adjustments,
                                                             ))}
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                                                         >
@@ -599,7 +602,8 @@ const EmployeeDashboard: React.FC = () => {
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
