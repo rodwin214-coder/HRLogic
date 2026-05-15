@@ -256,7 +256,7 @@ export interface EmployeeFile {
 
 export type PayFrequency = 'weekly' | 'bi-weekly' | 'semi-monthly' | 'monthly';
 export type PayrollStatus = 'Draft' | 'Finalized' | 'Paid';
-export type AdjustmentType = 'bonus' | 'commission' | 'allowance' | 'sss_loan' | 'pagibig_loan' | 'cash_advance' | 'other_deduction' | 'other_addition';
+export type AdjustmentType = 'bonus' | 'commission' | 'allowance' | 'sss_loan' | 'pagibig_loan' | 'cash_advance' | 'other_deduction' | 'other_addition' | 'thirteenth_month';
 
 export type DeMinimisType =
     | 'rice_subsidy'

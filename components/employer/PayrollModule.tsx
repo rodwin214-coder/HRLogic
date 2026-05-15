@@ -383,11 +383,12 @@ interface EditRecordModalProps {
     onClose: () => void;
     onSave: (r: PayrollRecord) => void;
     period: PayrollPeriod;
+    employerShouldersContributions?: boolean;
 }
 
 const DE_MINIMIS_TYPES = Object.entries(DE_MINIMIS_CEILINGS) as [DeMinimisType, { label: string; monthlyCeiling: number; note: string }][];
 
-const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName, onClose, onSave, period }) => {
+const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName, onClose, onSave, period, employerShouldersContributions = false }) => {
     const [form, setForm] = useState({ ...record });
     const [deMinimisItems, setDeMinimisItems] = useState<DeMinimisItem[]>([]);
     const [loadingDM, setLoadingDM] = useState(true);
@@ -445,10 +446,11 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             deMinimisExempt: exempt,
             deMinimisExcess: excess,
             payFrequency: period.payFrequency,
+            employerShouldersContributions,
         });
         setForm(prev => ({ ...prev, ...computed, id: prev.id }));
         setComputing(false);
-    }, [period.payFrequency]);
+    }, [period.payFrequency, employerShouldersContributions]);
 
     const setN = (k: keyof PayrollRecord, v: string) => {
         const val = parseFloat(v) || 0;
@@ -760,6 +762,7 @@ const ADJUSTMENT_LABELS: Record<AdjustmentType, string> = {
     bonus: 'Bonus',
     commission: 'Commission',
     allowance: 'Additional Allowance',
+    thirteenth_month: '13th Month Pay',
     sss_loan: 'SSS Loan',
     pagibig_loan: 'Pag-IBIG Loan',
     cash_advance: 'Cash Advance',
@@ -1596,6 +1599,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     record={editRecord}
                     employeeName={(() => { const e = empMap.get(editRecord.employeeId); return e ? `${e.firstName} ${e.lastName}` : ''; })()}
                     period={period}
+                    employerShouldersContributions={employerShouldersContributions}
                     onClose={() => setEditRecord(null)}
                     onSave={updated => {
                         setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
