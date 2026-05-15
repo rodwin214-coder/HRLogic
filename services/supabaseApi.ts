@@ -3186,9 +3186,9 @@ export const analyzeAttendanceForPayroll = async (params: {
                 // Unpaid leave days are not in approvedLeaveDates, so they still trigger a deduction.
                 absentDays += 1;
             }
-            // Regular holidays: paid for full shift even without attendance (PH Labor Code Art. 94)
+            // Regular holidays: paid for 8 hours regardless of attendance (PH Labor Code Art. 94)
             if (isWorkDay && holidayType === 'Regular') {
-                regularHolidayHours += (shiftEndMin - shiftStartMin) / 60;
+                regularHolidayHours += 8;
             }
             continue;
         }
@@ -3216,11 +3216,11 @@ export const analyzeAttendanceForPayroll = async (params: {
         }
 
         // Holiday / rest day earnings classification
-        // Regular holidays: always credit full shift hours regardless of actual time clocked
+        // Regular holidays: always credit 8 hours regardless of actual time clocked
         if (isRestDay) {
             restDayHours += workedMin / 60;
         } else if (holidayType === 'Regular') {
-            regularHolidayHours += (shiftEndMin - shiftStartMin) / 60;
+            regularHolidayHours += 8;
         } else if (holidayType === 'Special') {
             specialHolidayHours += workedMin / 60;
         }
