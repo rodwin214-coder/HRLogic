@@ -3820,7 +3820,9 @@ export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Pr
             p_employer_contributions_benefit: record.employerContributionsBenefit,
         });
         if (error) throw error;
-        return dbRecordToPayrollRecord(data);
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) return null;
+        return dbRecordToPayrollRecord(row);
     } catch (err) {
         console.error('upsertPayrollRecord error:', err);
         return null;

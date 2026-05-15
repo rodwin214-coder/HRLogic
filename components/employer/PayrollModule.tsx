@@ -1133,15 +1133,21 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
 
     const handleGenerate = async () => {
         setGenerating(true);
-        const result = await generatePayrollForPeriod(period, employees, {
-            shifts,
-            workSchedule: companySchedule,
-            gracePeriodMinutes,
-            holidays,
-            employerShouldersContributions,
-        });
-        setRecords(result);
-        setGenerating(false);
+        try {
+            const result = await generatePayrollForPeriod(period, employees, {
+                shifts,
+                workSchedule: companySchedule,
+                gracePeriodMinutes,
+                holidays,
+                employerShouldersContributions,
+            });
+            setRecords(result);
+        } catch (err) {
+            console.error('generatePayrollForPeriod error:', err);
+            alert(`Payroll generation failed: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setGenerating(false);
+        }
     };
 
     const filteredRecords = records.filter(r => {
