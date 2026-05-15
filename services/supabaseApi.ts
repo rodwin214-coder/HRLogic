@@ -1104,6 +1104,7 @@ export const getRequests = async (): Promise<AppRequest[]> => {
             hours: parseFloat(r.hours || 0),
             reason: r.reason,
             changes: r.changes,
+            holidayType: r.holiday_type ?? undefined,
         })) as AppRequest[];
     } catch (error) {
         console.error('Error fetching requests:', error);
@@ -1133,6 +1134,7 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
                 hours: requestData.hours,
                 reason: requestData.reason,
                 changes: requestData.changes,
+                holiday_type: requestData.holidayType ?? null,
             }])
             .select()
             .single();
@@ -2059,6 +2061,7 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             hours: parseFloat(data.hours || 0),
             reason: data.reason,
             changes: data.changes,
+            holidayType: data.holiday_type ?? undefined,
         } as AppRequest;
     } catch (error) {
         console.error('Error in updateRequestStatus:', error);
