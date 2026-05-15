@@ -1449,8 +1449,8 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                             ...(employerShouldersContributions ? [['ER Contrib. Benefit', null]] : []),
                                             ['Gross', 'grossPay'], ['SSS', 'sss'], ['PhilHealth', 'philhealth'], ['Pag-IBIG', 'pagibig'], ['W/Tax', 'tax'],
                                             ['Other Adj.', 'otherAdj'], ['Net Pay', 'netPay'], ['', null],
-                                        ] as [string, SortField | null][]).map(([h, field]) => (
-                                            <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                                        ] as [string, SortField | null][]).map(([h, field], i) => (
+                                            <th key={h} className={`px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap ${i === 0 ? 'sticky left-0 z-10 bg-gray-50 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-gray-200' : ''}`}>
                                                 {field ? (
                                                     <button onClick={() => handleSort(field)} className="flex items-center gap-1 hover:text-gray-900 transition-colors group">
                                                         {h}
@@ -1486,7 +1486,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                         )}
                                                     </td>
                                                 )}
-                                                <td className="px-3 py-3 font-medium text-gray-900 whitespace-nowrap">
+                                                <td className={`px-3 py-3 font-medium text-gray-900 whitespace-nowrap sticky left-0 z-10 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-gray-200 ${isPaid ? 'bg-gray-50' : 'bg-white'}`}>
                                                     {emp ? `${emp.lastName}, ${emp.firstName}` : r.employeeId}
                                                     <div className="text-xs text-gray-400">{emp?.department}</div>
                                                 </td>
