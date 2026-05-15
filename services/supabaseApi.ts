@@ -3075,8 +3075,8 @@ export const analyzeAttendanceForPayroll = async (params: {
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
-            .gte('clock_in_time', `${periodStart}T00:00:00`)
-            .lte('clock_in_time', `${periodEnd}T23:59:59`),
+            .gte('clock_in_time', `${periodStart}T00:00:00+08:00`)
+            .lte('clock_in_time', `${periodEnd}T23:59:59+08:00`),
         supabase
             .from('requests')
             .select('*')
