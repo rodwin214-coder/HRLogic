@@ -3384,20 +3384,23 @@ export const computeEmployeePayroll = async (params: {
     const hourlyRate   = hourlyRateOverride != null ? hourlyRateOverride : dailyRate / shiftHours;
     const minuteRate   = hourlyRate / 60;
 
-    // ── Basic Pay (fixed for the period) ─────────────────────────────────────
-    // Semi-monthly: exactly half the monthly salary per cut-off.
-    // Other frequencies: daily rate × scheduled work days in the period.
-    const basicPay = payFrequency === 'semi-monthly'
-        ? monthlyBasic / 2
-        : dailyRate * scheduledWorkDays;
+    // ── Basic Pay ────────────────────────────────────────────────────────────
+    // Part-time: paid strictly for actual hours worked at their hourly rate.
+    // Regular employees: semi-monthly = half monthly; others = daily rate × scheduled days.
+    const actualHoursWorked = hoursWorkedParam ?? daysWorked * shiftHours;
+    const basicPay = isPartTime
+        ? actualHoursWorked * hourlyRate
+        : payFrequency === 'semi-monthly'
+            ? monthlyBasic / 2
+            : dailyRate * scheduledWorkDays;
 
     // ── Attendance Deductions ─────────────────────────────────────────────────
     // Absences: missed scheduled work days with no approved leave (incl. unpaid leave)
-    const absentDeduction    = absentDays * dailyRate;
-    // Late: minutes from shift start to clock-in (measured after grace period triggers)
-    const lateDeduction      = lateMinutes * minuteRate;
-    // Undertime: minutes left before shift end when clocked out early
-    const undertimeDeduction = undertimeMinutes * minuteRate;
+    // Part-time has no absence deduction — their pay is already hours-based.
+    const absentDeduction    = isPartTime ? 0 : absentDays * dailyRate;
+    // Late/undertime deductions don't apply to part-time — pay is already hours-based.
+    const lateDeduction      = isPartTime ? 0 : lateMinutes * minuteRate;
+    const undertimeDeduction = isPartTime ? 0 : undertimeMinutes * minuteRate;
 
     // ── OT & Holiday Premiums (PH Labor Code) ────────────────────────────────
     // OT pay is suppressed when holiday hours are present — holiday pay already covers the full day.
@@ -3456,7 +3459,7 @@ export const computeEmployeePayroll = async (params: {
         basicSalary,
         dailyRate,
         daysWorked,
-        hoursWorked: hoursWorkedParam ?? daysWorked * 8,
+        hoursWorked: actualHoursWorked,
         basicPay,
         absentDays,
         absentDeduction,

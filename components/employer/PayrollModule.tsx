@@ -1251,8 +1251,18 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
         setMarkingPaid(false);
     };
 
+    const DEDUCTION_TYPES: AdjustmentType[] = ['sss_loan', 'pagibig_loan', 'cash_advance', 'other_deduction'];
+
+    const adjustmentNetByEmployee = new Map<string, number>();
+    for (const adj of adjustments) {
+        const sign = DEDUCTION_TYPES.includes(adj.adjustmentType) ? -1 : 1;
+        adjustmentNetByEmployee.set(adj.employeeId, (adjustmentNetByEmployee.get(adj.employeeId) ?? 0) + sign * adj.amount);
+    }
+
+    const getAdjustedNetPay = (r: PayrollRecord) => r.netPay + (adjustmentNetByEmployee.get(r.employeeId) ?? 0);
+
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
-    const totalNet = records.reduce((s, r) => s + r.netPay, 0);
+    const totalNet = records.reduce((s, r) => s + getAdjustedNetPay(r), 0);
     const totalSSS = records.reduce((s, r) => s + r.sssContribution, 0);
     const totalPH = records.reduce((s, r) => s + r.philhealthContribution, 0);
     const totalPIBIG = records.reduce((s, r) => s + r.pagibigContribution, 0);
@@ -1429,7 +1439,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                         className="font-bold text-green-700 hover:text-green-900 hover:underline tabular-nums text-left transition-colors"
                                                         title="Click to view computation breakdown"
                                                     >
-                                                        {fmt(r.netPay)}
+                                                        {fmt(getAdjustedNetPay(r))}
                                                     </button>
                                                 </td>
                                                 <td className="px-3 py-3">
