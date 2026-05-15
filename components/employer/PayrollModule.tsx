@@ -422,6 +422,11 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
         'nightDiffHours', 'restDayHours', 'daysWorked',
         'allowance', 'otherBenefits', 'basicSalary',
     ];
+    const LOAN_KEYS: (keyof PayrollRecord)[] = ['sssLoan', 'pagibigLoan', 'cashAdvance', 'otherDeductions'];
+
+    const recalcNetWithLoans = (r: typeof form) =>
+        r.grossPay - r.sssContribution - r.philhealthContribution - r.pagibigContribution - r.withholdingTax
+        - r.sssLoan - r.pagibigLoan - r.cashAdvance - r.otherDeductions;
 
     const recompute = useCallback(async (currentForm: typeof form, exempt: number, excess: number) => {
         setComputing(true);
@@ -458,6 +463,11 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
         setForm(prev => {
             const next = { ...prev, ...computed, id: prev.id };
             for (const k of PRESERVE_KEYS) (next as any)[k] = (prev as any)[k];
+            // Preserve loan values and subtract them from net pay
+            for (const k of ['sssLoan', 'pagibigLoan', 'cashAdvance', 'otherDeductions'] as (keyof PayrollRecord)[]) {
+                (next as any)[k] = (prev as any)[k];
+            }
+            next.netPay = recalcNetWithLoans(next);
             return next;
         });
         setComputing(false);
@@ -472,6 +482,9 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                 debounceRef.current = setTimeout(() => {
                     recompute(next, totalExemptRef.current, totalExcessRef.current);
                 }, 600);
+            }
+            if (LOAN_KEYS.includes(k)) {
+                next.netPay = recalcNetWithLoans(next);
             }
             return next;
         });
@@ -505,11 +518,12 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
 
     const handleSave = async () => {
         setSaving(true);
-        // Sync de minimis totals into the record before saving
-        const updatedForm = {
-            ...form,
-            deMinimis: totalExempt + totalExcess,
-        };
+        // Sync de minimis totals and recalculate net pay with loans before saving
+        const withDM = { ...form, deMinimis: totalExempt + totalExcess };
+        const netPay = recalcNetWithLoans(withDM);
+        const totalDeductions = withDM.sssContribution + withDM.philhealthContribution + withDM.pagibigContribution
+            + withDM.withholdingTax + withDM.sssLoan + withDM.pagibigLoan + withDM.cashAdvance + withDM.otherDeductions;
+        const updatedForm = { ...withDM, netPay, totalDeductions };
         const saved = await upsertPayrollRecord(updatedForm);
         setSaving(false);
         if (saved) onSave(saved);
