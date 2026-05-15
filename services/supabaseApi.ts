@@ -3186,8 +3186,10 @@ export const analyzeAttendanceForPayroll = async (params: {
                 // Unpaid leave days are not in approvedLeaveDates, so they still trigger a deduction.
                 absentDays += 1;
             }
-            // Regular holidays: employee is paid even without attendance (PH Labor Code Art. 94)
-            // No daysWorked increment needed — basic pay already covers the period rate
+            // Regular holidays: paid for full shift even without attendance (PH Labor Code Art. 94)
+            if (isWorkDay && holidayType === 'Regular') {
+                regularHolidayHours += (shiftEndMin - shiftStartMin) / 60;
+            }
             continue;
         }
 
@@ -3214,10 +3216,11 @@ export const analyzeAttendanceForPayroll = async (params: {
         }
 
         // Holiday / rest day earnings classification
+        // Regular holidays: always credit full shift hours regardless of actual time clocked
         if (isRestDay) {
             restDayHours += workedMin / 60;
         } else if (holidayType === 'Regular') {
-            regularHolidayHours += workedMin / 60;
+            regularHolidayHours += (shiftEndMin - shiftStartMin) / 60;
         } else if (holidayType === 'Special') {
             specialHolidayHours += workedMin / 60;
         }
