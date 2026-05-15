@@ -9,10 +9,11 @@ export const generatePayslipHTML = (
     payDate: string,
     company: CompanyProfile | null,
     payFrequency: PayFrequency,
-    employerShouldersContributions = false,
 ): string => {
     const f = (n: number) => '₱' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
+    const erShouldered = r.employerContributionsBenefit > 0;
+
     const logoHTML = company?.logo
         ? `<img src="${company.logo}" style="height:56px;object-fit:contain;" />`
         : `<div style="width:56px;height:56px;background:#1e40af;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:20px;">${(company?.name ?? 'C')[0]}</div>`;
@@ -80,6 +81,7 @@ export const generatePayslipHTML = (
   ${r.allowance > 0 ? row(`Allowance${benefitDivisor > 1 ? ' (÷2)' : ''}`, f(r.allowance), '#15803d') : ''}
   ${r.otherBenefits > 0 ? row(`Other Benefits${benefitDivisor > 1 ? ' (÷2)' : ''}`, f(r.otherBenefits), '#15803d') : ''}
   ${r.deMinimis > 0 ? row('De Minimis Benefits', f(r.deMinimis), '#15803d') : ''}
+  ${erShouldered ? row('Employer-Shouldered Contributions', f(r.employerContributionsBenefit), '#0369a1') : ''}
 </table>
 <hr class="divider"/>
 
@@ -95,19 +97,18 @@ export const generatePayslipHTML = (
 <!-- Gross -->
 <div class="gross-box"><span style="font-size:13px;font-weight:600;">GROSS PAY</span><span style="font-size:16px;font-weight:700;">${f(r.grossPay)}</span></div>
 
-<!-- Government -->
+<!-- Government Contributions -->
 ${(r.sssContribution > 0 || r.philhealthContribution > 0 || r.pagibigContribution > 0 || r.withholdingTax > 0) ? `
 <table style="margin-top:8px;">
-  <tr><th colspan="2">Government Contributions${employerShouldersContributions ? ' <span style="font-size:10px;font-weight:400;color:#15803d;">(Employer-Shouldered)</span>' : ''}</th></tr>
-  ${r.sssContribution > 0 ? row('SSS' + (employerShouldersContributions ? ' (paid by employer)' : ''), employerShouldersContributions ? f(r.sssContribution) : '-' + f(r.sssContribution), employerShouldersContributions ? '#15803d' : '#dc2626') : ''}
-  ${r.philhealthContribution > 0 ? row('PhilHealth' + (employerShouldersContributions ? ' (paid by employer)' : ''), employerShouldersContributions ? f(r.philhealthContribution) : '-' + f(r.philhealthContribution), employerShouldersContributions ? '#15803d' : '#dc2626') : ''}
-  ${r.pagibigContribution > 0 ? row('Pag-IBIG' + (employerShouldersContributions ? ' (paid by employer)' : ''), employerShouldersContributions ? f(r.pagibigContribution) : '-' + f(r.pagibigContribution), employerShouldersContributions ? '#15803d' : '#dc2626') : ''}
+  <tr><th colspan="2">Government Contributions${erShouldered ? ' <span style="font-size:10px;font-weight:400;color:#0369a1;">(Remitted by Employer)</span>' : ''}</th></tr>
+  ${r.sssContribution > 0 ? row('SSS', '-' + f(r.sssContribution), '#dc2626') : ''}
+  ${r.philhealthContribution > 0 ? row('PhilHealth', '-' + f(r.philhealthContribution), '#dc2626') : ''}
+  ${r.pagibigContribution > 0 ? row('Pag-IBIG', '-' + f(r.pagibigContribution), '#dc2626') : ''}
   ${r.withholdingTax > 0 ? row('Withholding Tax (BIR)', '-' + f(r.withholdingTax), '#dc2626') : ''}
-  ${employerShouldersContributions ? row('Net Contribution Deduction', f(0) + ' (fully shouldered)', '#15803d') : ''}
 </table>
 <hr class="divider"/>` : ''}
 
-<!-- Loans -->
+<!-- Loans & Other Deductions -->
 ${(r.sssLoan > 0 || r.pagibigLoan > 0 || r.cashAdvance > 0 || r.otherDeductions > 0) ? `
 <table>
   <tr><th colspan="2">Loans & Other Deductions</th></tr>

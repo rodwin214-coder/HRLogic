@@ -37,11 +37,10 @@ interface PayrollBreakdownModalProps {
     payDate: string;
     payFrequency: PayFrequency;
     company: CompanyProfile | null;
-    employerShouldersContributions?: boolean;
     onClose: () => void;
 }
 
-const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, employerShouldersContributions = false, onClose }) => {
+const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, onClose }) => {
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const dailyRate = r.dailyRate;
     const hourlyRate = dailyRate / 8;
@@ -124,25 +123,12 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
     const taxableIncome = r.taxableIncome;
     const annualTaxable = taxableIncome * 12;
 
+    const erShouldered = r.employerContributionsBenefit > 0;
     const contribRows: Row[] = [
-        {
-            label: `SSS${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
-            formula: benefitDivisor > 1 ? `Monthly SSS ÷ ${benefitDivisor}` : 'Based on monthly salary bracket',
-            value: employerShouldersContributions ? 0 : -r.sssContribution,
-            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
-        },
-        {
-            label: `PhilHealth${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
-            formula: benefitDivisor > 1 ? `Monthly PhilHealth ÷ ${benefitDivisor}` : 'Based on monthly salary',
-            value: employerShouldersContributions ? 0 : -r.philhealthContribution,
-            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
-        },
-        {
-            label: `Pag-IBIG${employerShouldersContributions ? ' (employer-shouldered)' : ''}`,
-            formula: benefitDivisor > 1 ? `Monthly Pag-IBIG ÷ ${benefitDivisor}` : 'Based on monthly salary',
-            value: employerShouldersContributions ? 0 : -r.pagibigContribution,
-            color: employerShouldersContributions ? 'text-blue-600' : 'text-red-600',
-        },
+        { label: 'SSS', formula: benefitDivisor > 1 ? `Monthly SSS ÷ ${benefitDivisor}` : 'Based on monthly salary bracket', value: -r.sssContribution, color: 'text-red-600' },
+        { label: 'PhilHealth', formula: benefitDivisor > 1 ? `Monthly PhilHealth ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.philhealthContribution, color: 'text-red-600' },
+        { label: 'Pag-IBIG', formula: benefitDivisor > 1 ? `Monthly Pag-IBIG ÷ ${benefitDivisor}` : 'Based on monthly salary', value: -r.pagibigContribution, color: 'text-red-600' },
+        ...(erShouldered ? [{ label: 'Employer-Shouldered Contributions (benefit added to gross)', formula: 'SSS + PhilHealth + Pag-IBIG', value: r.employerContributionsBenefit, color: 'text-sky-700', bold: true }] : []),
     ];
 
     const taxRows: Row[] = [
@@ -244,7 +230,7 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
 
                 <div className="flex justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
                     <button
-                        onClick={() => openPayslip(generatePayslipHTML(r, employeeName, employeeId, department, periodName, payDate, company, payFrequency, employerShouldersContributions))}
+                        onClick={() => openPayslip(generatePayslipHTML(r, employeeName, employeeId, department, periodName, payDate, company, payFrequency))}
                         className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         Export / Print Payslip
@@ -837,10 +823,9 @@ interface PayrollReportsProps {
     period: PayrollPeriod;
     company: CompanyProfile | null;
     empMap: Map<string, Employee>;
-    employerShouldersContributions?: boolean;
 }
 
-const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap, employerShouldersContributions = false }) => {
+const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap }) => {
     const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'payslips-all'>('payroll-register');
 
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
@@ -919,7 +904,7 @@ ${htmlBody}
         printReport('Government Contributions Report', `<table>
           <thead><tr><th>Employee</th><th>Dept.</th><th>Basic Salary</th><th>SSS (EE)</th><th>SSS (ER)</th><th>PhilHealth (EE)</th><th>PhilHealth (ER)</th><th>Pag-IBIG (EE)</th><th>Pag-IBIG (ER)</th><th>W/Tax (BIR)</th></tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr><td colspan="3">TOTAL</td><td>₱${totalSSS.toFixed(2)}</td><td>₱${(totalSSS*9.5/4.5).toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td></tr></tfoot>
+          <tfoot><tr><td colspan="3">TOTAL</td><td>₱${totalSSS.toFixed(2)}</td><td>₱${(totalSSS*2).toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPH.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalPIBIG.toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td></tr></tfoot>
         </table>`);
     };
 
@@ -981,7 +966,7 @@ ${htmlBody}
         const allHTML = records.map(r => {
             const e = empMap.get(r.employeeId);
             const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
-            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, employerShouldersContributions);
+            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency);
         });
         const combined = allHTML.map((h, i) =>
             `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE[\s\S]*?<body[^>]*>/i, '').replace('</body></html>', '')}</div>`
@@ -1316,11 +1301,9 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 />
                                             </th>
                                         )}
-                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis', 'Gross',
-                                            employerShouldersContributions ? 'SSS (ER)' : 'SSS',
-                                            employerShouldersContributions ? 'PhilHealth (ER)' : 'PhilHealth',
-                                            employerShouldersContributions ? 'Pag-IBIG (ER)' : 'Pag-IBIG',
-                                            'W/Tax', 'Net Pay', ''].map(h => (
+                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis',
+                                            ...(employerShouldersContributions ? ['ER Contrib. Benefit'] : []),
+                                            'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Net Pay', ''].map(h => (
                                             <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                                         ))}
                                     </tr>
@@ -1361,16 +1344,13 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 <td className="px-3 py-3 text-green-700">{r.allowance > 0 ? fmt(r.allowance) : '—'}</td>
                                                 <td className="px-3 py-3 text-green-700">{r.otherBenefits > 0 ? fmt(r.otherBenefits) : '—'}</td>
                                                 <td className="px-3 py-3 text-green-700">{r.deMinimis > 0 ? fmt(r.deMinimis) : '—'}</td>
+                                                {employerShouldersContributions && (
+                                                    <td className="px-3 py-3 text-sky-700 font-medium">{r.employerContributionsBenefit > 0 ? fmt(r.employerContributionsBenefit) : '—'}</td>
+                                                )}
                                                 <td className="px-3 py-3 font-medium text-gray-900">{fmt(r.grossPay)}</td>
-                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
-                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.sssContribution)}</span>
-                                                </td>
-                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
-                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.philhealthContribution)}</span>
-                                                </td>
-                                                <td className={`px-3 py-3 ${employerShouldersContributions ? 'text-blue-600' : 'text-red-600'}`}>
-                                                    <span title={employerShouldersContributions ? 'Paid by employer' : undefined}>{fmt(r.pagibigContribution)}</span>
-                                                </td>
+                                                <td className="px-3 py-3 text-red-600">{fmt(r.sssContribution)}</td>
+                                                <td className="px-3 py-3 text-red-600">{fmt(r.philhealthContribution)}</td>
+                                                <td className="px-3 py-3 text-red-600">{fmt(r.pagibigContribution)}</td>
                                                 <td className="px-3 py-3 text-red-600">{fmt(r.withholdingTax)}</td>
                                                 <td className="px-3 py-3">
                                                     <button
@@ -1390,7 +1370,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                         <button
                                                             onClick={() => {
                                                                 const emp = empMap.get(r.employeeId);
-                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, employerShouldersContributions));
+                                                                openPayslip(generatePayslipHTML(r, emp ? `${emp.firstName} ${emp.lastName}` : '', emp?.employeeId ?? '', emp?.department ?? '', period.periodName, period.payDate, company, period.payFrequency));
                                                             }}
                                                             className="text-xs text-gray-500 hover:text-gray-800 font-medium"
                                                             title="Export payslip">
@@ -1414,6 +1394,9 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                         <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.allowance, 0))}</td>
                                         <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.otherBenefits, 0))}</td>
                                         <td className="px-3 py-3 text-green-700">{fmt(records.reduce((s, r) => s + r.deMinimis, 0))}</td>
+                                        {employerShouldersContributions && (
+                                            <td className="px-3 py-3 text-sky-700">{fmt(records.reduce((s, r) => s + r.employerContributionsBenefit, 0))}</td>
+                                        )}
                                         <td className="px-3 py-3">{fmt(totalGross)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalSSS)}</td>
                                         <td className="px-3 py-3 text-red-700">{fmt(totalPH)}</td>
@@ -1557,7 +1540,6 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     period={period}
                     company={company}
                     empMap={empMap}
-                    employerShouldersContributions={employerShouldersContributions}
                 />
             )}
 
@@ -1573,7 +1555,6 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                         payDate={period.payDate}
                         payFrequency={period.payFrequency}
                         company={company}
-                        employerShouldersContributions={employerShouldersContributions}
                         onClose={() => setBreakdownRecord(null)}
                     />
                 );

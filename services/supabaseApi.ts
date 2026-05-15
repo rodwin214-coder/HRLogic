@@ -2977,6 +2977,7 @@ function dbRecordToPayrollRecord(r: any): PayrollRecord {
         philhealthContribution: Number(r.philhealth_contribution),
         pagibigContribution: Number(r.pagibig_contribution),
         totalContributions: Number(r.total_contributions),
+        employerContributionsBenefit: Number(r.employer_contributions_benefit ?? 0),
         taxableIncome: Number(r.taxable_income),
         withholdingTax: Number(r.withholding_tax),
         sssLoan: Number(r.sss_loan),
@@ -3404,13 +3405,6 @@ export const computeEmployeePayroll = async (params: {
     const thirteenthMonthAccrued = monthlyBasic / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
 
-    // ── Gross Pay ─────────────────────────────────────────────────────────────
-    // Basic (fixed) + OT/Holiday premiums − Tardiness − Absences + Allowances + Benefits
-    const grossPay = basicPay
-        + overtimePay + regularHolidayPay + specialHolidayPay + nightDiffPay + restDayPay
-        - absentDeduction - lateDeduction - undertimeDeduction
-        + allowance + otherBenefits + totalDeMinimis;
-
     // ── Contributions — part-time employees are exempt ───────────────────────
     const monthlySss        = isPartTime ? 0 : await computeSSSContribution(monthlyBasic);
     const monthlyPhilhealth = isPartTime ? 0 : await computePhilHealthContribution(monthlyBasic);
@@ -3419,6 +3413,18 @@ export const computeEmployeePayroll = async (params: {
     const philhealthContribution = monthlyPhilhealth / benefitDivisor;
     const pagibigContribution    = monthlyPagibig    / benefitDivisor;
     const totalContributions     = sssContribution + philhealthContribution + pagibigContribution;
+
+    // When employer shoulders contributions, the contribution amount is added to
+    // gross pay as an employer benefit, then deducted normally — they cancel out
+    // so the employee's take-home = basic − tax only.
+    const employerContributionsBenefit = employerShouldersContributions ? totalContributions : 0;
+
+    // ── Gross Pay ─────────────────────────────────────────────────────────────
+    const grossPay = basicPay
+        + overtimePay + regularHolidayPay + specialHolidayPay + nightDiffPay + restDayPay
+        - absentDeduction - lateDeduction - undertimeDeduction
+        + allowance + otherBenefits + totalDeMinimis
+        + employerContributionsBenefit;
 
     // ── Withholding Tax — BIR Annualized Method (TRAIN Law) ──────────────────
     const monthlyTotalContributions = monthlySss + monthlyPhilhealth + monthlyPagibig;
@@ -3431,9 +3437,9 @@ export const computeEmployeePayroll = async (params: {
     const withholdingTax = isPartTime ? 0 : Math.max(0, annualTax / 12 / periodsPerMonth[payFrequency]);
 
     // ── Net Pay ───────────────────────────────────────────────────────────────
-    // When employer shoulders contributions, they are not deducted from employee take-home.
-    const employeeContributions = employerShouldersContributions ? 0 : totalContributions;
-    const totalDeductions = employeeContributions + withholdingTax;
+    // Contributions always deducted — when employer shoulders, the benefit added
+    // to gross cancels them out, so net = basic − tax only.
+    const totalDeductions = totalContributions + withholdingTax;
     const netPay = grossPay - totalDeductions;
 
     return {
@@ -3470,6 +3476,7 @@ export const computeEmployeePayroll = async (params: {
         philhealthContribution,
         pagibigContribution,
         totalContributions,
+        employerContributionsBenefit,
         taxableIncome: monthlyTaxableComp,
         withholdingTax,
         sssLoan: 0,
@@ -3805,11 +3812,12 @@ export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Pr
             p_sss_loan:                 record.sssLoan,
             p_pagibig_loan:             record.pagibigLoan,
             p_cash_advance:             record.cashAdvance,
-            p_other_deductions:         record.otherDeductions,
-            p_total_deductions:         record.totalDeductions,
-            p_net_pay:                  record.netPay,
-            p_status:                   record.status,
-            p_notes:                    record.notes,
+            p_other_deductions:              record.otherDeductions,
+            p_total_deductions:              record.totalDeductions,
+            p_net_pay:                       record.netPay,
+            p_status:                        record.status,
+            p_notes:                         record.notes,
+            p_employer_contributions_benefit: record.employerContributionsBenefit,
         });
         if (error) throw error;
         return dbRecordToPayrollRecord(data);

@@ -336,6 +336,7 @@ export interface PayrollRecord {
     philhealthContribution: number;
     pagibigContribution: number;
     totalContributions: number;
+    employerContributionsBenefit: number;
     // Tax
     taxableIncome: number;
     withholdingTax: number;
