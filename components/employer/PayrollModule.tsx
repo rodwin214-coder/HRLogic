@@ -888,13 +888,24 @@ interface PayrollReportsProps {
     period: PayrollPeriod;
     company: CompanyProfile | null;
     empMap: Map<string, Employee>;
+    adjustments: PayrollAdjustment[];
 }
 
-const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap }) => {
+const REPORT_DEDUCTION_TYPES: AdjustmentType[] = ['sss_loan', 'pagibig_loan', 'cash_advance', 'other_deduction'];
+
+const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap, adjustments }) => {
     const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'payslips-all'>('payroll-register');
 
+    const adjNetByEmployee = new Map<string, PayrollAdjustment[]>();
+    for (const a of adjustments) {
+        const list = adjNetByEmployee.get(a.employeeId) ?? [];
+        list.push(a);
+        adjNetByEmployee.set(a.employeeId, list);
+    }
+    const getAdjNet = (employeeId: string) => (adjNetByEmployee.get(employeeId) ?? []).reduce((s, a) => s + (REPORT_DEDUCTION_TYPES.includes(a.adjustmentType) ? -1 : 1) * a.amount, 0);
+
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
-    const totalNet = records.reduce((s, r) => s + r.netPay, 0);
+    const totalNet = records.reduce((s, r) => s + r.netPay + getAdjNet(r.employeeId), 0);
     const totalSSS = records.reduce((s, r) => s + r.sssContribution, 0);
     const totalPH = records.reduce((s, r) => s + r.philhealthContribution, 0);
     const totalPIBIG = records.reduce((s, r) => s + r.pagibigContribution, 0);
@@ -930,6 +941,8 @@ ${htmlBody}
             const e = empMap.get(r.employeeId);
             const name = e ? `${e.lastName}, ${e.firstName}` : r.employeeId;
             const tard = r.lateDeduction + r.undertimeDeduction;
+            const adjNet = getAdjNet(r.employeeId);
+            const netPay = r.netPay + adjNet;
             return `<tr>
               <td>${name}</td><td>${e?.department ?? ''}</td>
               <td style="text-align:right">${r.daysWorked}</td>
@@ -940,13 +953,15 @@ ${htmlBody}
               <td style="text-align:right">₱${r.grossPay.toFixed(2)}</td>
               <td style="text-align:right">₱${(r.sssContribution + r.philhealthContribution + r.pagibigContribution).toFixed(2)}</td>
               <td style="text-align:right">₱${r.withholdingTax.toFixed(2)}</td>
-              <td style="text-align:right;font-weight:600;">₱${r.netPay.toFixed(2)}</td>
+              <td style="text-align:right;color:${adjNet > 0 ? '#15803d' : adjNet < 0 ? '#dc2626' : '#374151'}">${adjNet !== 0 ? (adjNet > 0 ? '+' : '') + '₱' + adjNet.toFixed(2) : '—'}</td>
+              <td style="text-align:right;font-weight:600;">₱${netPay.toFixed(2)}</td>
             </tr>`;
         }).join('');
+        const totalAdj = records.reduce((s, r) => s + getAdjNet(r.employeeId), 0);
         printReport('Payroll Register', `<table>
-          <thead><tr><th>Employee</th><th>Dept.</th><th>Days</th><th>Basic Pay</th><th>OT Pay</th><th>Absences</th><th>Tardiness</th><th>Gross</th><th>Contributions</th><th>W/Tax</th><th>Net Pay</th></tr></thead>
+          <thead><tr><th>Employee</th><th>Dept.</th><th>Days</th><th>Basic Pay</th><th>OT Pay</th><th>Absences</th><th>Tardiness</th><th>Gross</th><th>Contributions</th><th>W/Tax</th><th>Other Adj.</th><th>Net Pay</th></tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr><td colspan="3">TOTAL (${records.length} employees)</td><td>₱${records.reduce((s,r)=>s+r.basicPay,0).toFixed(2)}</td><td>₱${totalOT.toFixed(2)}</td><td>-₱${totalAbsent.toFixed(2)}</td><td>-₱${totalLate.toFixed(2)}</td><td>₱${totalGross.toFixed(2)}</td><td>₱${(totalSSS+totalPH+totalPIBIG).toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td><td>₱${totalNet.toFixed(2)}</td></tr></tfoot>
+          <tfoot><tr><td colspan="3">TOTAL (${records.length} employees)</td><td>₱${records.reduce((s,r)=>s+r.basicPay,0).toFixed(2)}</td><td>₱${totalOT.toFixed(2)}</td><td>-₱${totalAbsent.toFixed(2)}</td><td>-₱${totalLate.toFixed(2)}</td><td>₱${totalGross.toFixed(2)}</td><td>₱${(totalSSS+totalPH+totalPIBIG).toFixed(2)}</td><td>₱${totalTax.toFixed(2)}</td><td>${totalAdj !== 0 ? (totalAdj > 0 ? '+' : '') + '₱' + totalAdj.toFixed(2) : '—'}</td><td>₱${totalNet.toFixed(2)}</td></tr></tfoot>
         </table>`);
     };
 
@@ -1031,7 +1046,8 @@ ${htmlBody}
         const allHTML = records.map(r => {
             const e = empMap.get(r.employeeId);
             const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
-            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency);
+            const empAdjs = adjNetByEmployee.get(r.employeeId) ?? [];
+            return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, empAdjs);
         });
         const combined = allHTML.map((h, i) =>
             `<div style="page-break-after:${i < allHTML.length - 1 ? 'always' : 'auto'}">${h.replace(/<!DOCTYPE[\s\S]*?<body[^>]*>/i, '').replace('</body></html>', '')}</div>`
@@ -1261,6 +1277,36 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
 
     const getAdjustedNetPay = (r: PayrollRecord) => r.netPay + (adjustmentNetByEmployee.get(r.employeeId) ?? 0);
 
+    type SortField = 'name' | 'department' | 'daysWorked' | 'basicPay' | 'grossPay' | 'sss' | 'philhealth' | 'pagibig' | 'tax' | 'otherAdj' | 'netPay';
+    const [sortField, setSortField] = useState<SortField>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+    const handleSort = (field: SortField) => {
+        if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        else { setSortField(field); setSortDir('asc'); }
+    };
+
+    const sortedRecords = [...filteredRecords].sort((a, b) => {
+        const empA = empMap.get(a.employeeId);
+        const empB = empMap.get(b.employeeId);
+        let av: number | string = 0, bv: number | string = 0;
+        switch (sortField) {
+            case 'name': av = empA ? `${empA.lastName} ${empA.firstName}` : ''; bv = empB ? `${empB.lastName} ${empB.firstName}` : ''; break;
+            case 'department': av = empA?.department ?? ''; bv = empB?.department ?? ''; break;
+            case 'daysWorked': av = a.daysWorked; bv = b.daysWorked; break;
+            case 'basicPay': av = a.basicPay; bv = b.basicPay; break;
+            case 'grossPay': av = a.grossPay; bv = b.grossPay; break;
+            case 'sss': av = a.sssContribution; bv = b.sssContribution; break;
+            case 'philhealth': av = a.philhealthContribution; bv = b.philhealthContribution; break;
+            case 'pagibig': av = a.pagibigContribution; bv = b.pagibigContribution; break;
+            case 'tax': av = a.withholdingTax; bv = b.withholdingTax; break;
+            case 'otherAdj': av = adjustmentNetByEmployee.get(a.employeeId) ?? 0; bv = adjustmentNetByEmployee.get(b.employeeId) ?? 0; break;
+            case 'netPay': av = getAdjustedNetPay(a); bv = getAdjustedNetPay(b); break;
+        }
+        if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+        return sortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
+    });
+
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
     const totalNet = records.reduce((s, r) => s + getAdjustedNetPay(r), 0);
     const totalSSS = records.reduce((s, r) => s + r.sssContribution, 0);
@@ -1382,15 +1428,29 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                                                 />
                                             </th>
                                         )}
-                                        {['Employee', 'Days Worked', 'Basic Pay', 'Holiday Pay', 'OT Pay', 'Less: Absences', 'Less: Tardiness', 'Allowance', 'Other Benefits', 'De Minimis',
-                                            ...(employerShouldersContributions ? ['ER Contrib. Benefit'] : []),
-                                            'Gross', 'SSS', 'PhilHealth', 'Pag-IBIG', 'W/Tax', 'Other Adj.', 'Net Pay', ''].map(h => (
-                                            <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                                        {([
+                                            ['Employee', 'name'], ['Days Worked', 'daysWorked'], ['Basic Pay', 'basicPay'],
+                                            ['Holiday Pay', null], ['OT Pay', null], ['Less: Absences', null], ['Less: Tardiness', null],
+                                            ['Allowance', null], ['Other Benefits', null], ['De Minimis', null],
+                                            ...(employerShouldersContributions ? [['ER Contrib. Benefit', null]] : []),
+                                            ['Gross', 'grossPay'], ['SSS', 'sss'], ['PhilHealth', 'philhealth'], ['Pag-IBIG', 'pagibig'], ['W/Tax', 'tax'],
+                                            ['Other Adj.', 'otherAdj'], ['Net Pay', 'netPay'], ['', null],
+                                        ] as [string, SortField | null][]).map(([h, field]) => (
+                                            <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                                                {field ? (
+                                                    <button onClick={() => handleSort(field)} className="flex items-center gap-1 hover:text-gray-900 transition-colors group">
+                                                        {h}
+                                                        <span className={`text-gray-300 group-hover:text-gray-500 ${sortField === field ? 'text-blue-500' : ''}`}>
+                                                            {sortField === field ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                                                        </span>
+                                                    </button>
+                                                ) : h}
+                                            </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {filteredRecords.map(r => {
+                                    {sortedRecords.map(r => {
                                         const emp = empMap.get(r.employeeId);
                                         const holidayPay = r.regularHolidayPay + r.specialHolidayPay + r.restDayPay + r.nightDiffPay;
                                         const tardiness = r.lateDeduction + r.undertimeDeduction;
@@ -1636,6 +1696,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     period={period}
                     company={company}
                     empMap={empMap}
+                    adjustments={adjustments}
                 />
             )}
 
