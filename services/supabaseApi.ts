@@ -3186,10 +3186,6 @@ export const analyzeAttendanceForPayroll = async (params: {
                 // Unpaid leave days are not in approvedLeaveDates, so they still trigger a deduction.
                 absentDays += 1;
             }
-            // Regular holidays: paid for 8 hours regardless of attendance (PH Labor Code Art. 94)
-            if (isWorkDay && holidayType === 'Regular') {
-                regularHolidayHours += 8;
-            }
             continue;
         }
 
@@ -3215,22 +3211,18 @@ export const analyzeAttendanceForPayroll = async (params: {
             undertimeMinutes += shiftEndMin - clockOutMin;
         }
 
-        // Holiday / rest day earnings classification
-        // Regular holidays: always credit 8 hours regardless of actual time clocked
+        // Rest day earnings (attendance-based, no OT request needed)
         if (isRestDay) {
             restDayHours += workedMin / 60;
-        } else if (holidayType === 'Regular') {
-            regularHolidayHours += 8;
-        } else if (holidayType === 'Special') {
-            specialHolidayHours += workedMin / 60;
         }
 
-        // Overtime — sourced from approved OT requests only
+        // Holiday pay and OT — sourced from approved OT requests only
         if (otRequest) {
             const approvedHrs    = otRequest.hours;
             const reqHolidayType = otRequest.holidayType;
             if (reqHolidayType === 'Regular') {
-                regularHolidayHours += approvedHrs;
+                // Regular holiday pay: credit 8 hours (standard day) regardless of filed OT hours
+                regularHolidayHours += 8;
             } else if (reqHolidayType === 'Special') {
                 specialHolidayHours += approvedHrs;
             } else {
