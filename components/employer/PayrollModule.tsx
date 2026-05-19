@@ -906,17 +906,23 @@ interface PayrollReportsProps {
 }
 
 const REPORT_DEDUCTION_TYPES: AdjustmentType[] = ['sss_loan', 'pagibig_loan', 'cash_advance', 'other_deduction'];
+const ADJ_LABEL: Record<AdjustmentType, string> = {
+    bonus: 'Bonus', commission: 'Commission', allowance: 'Allowance',
+    sss_loan: 'SSS Loan', pagibig_loan: 'Pag-IBIG Loan', cash_advance: 'Cash Advance',
+    other_deduction: 'Other Deduction', other_addition: 'Other Addition', thirteenth_month: '13th Month Pay',
+};
 
 const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, period, company, empMap, adjustments }) => {
-    const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'payslips-all'>('payroll-register');
+    const [reportType, setReportType] = useState<'payroll-register' | 'contributions' | 'attendance-cost' | 'thirteenth-month' | 'adjustments' | 'payslips-all'>('payroll-register');
 
-    const adjNetByEmployee = new Map<string, PayrollAdjustment[]>();
+    const adjByEmployee = new Map<string, PayrollAdjustment[]>();
     for (const a of adjustments) {
-        const list = adjNetByEmployee.get(a.employeeId) ?? [];
+        const list = adjByEmployee.get(a.employeeId) ?? [];
         list.push(a);
-        adjNetByEmployee.set(a.employeeId, list);
+        adjByEmployee.set(a.employeeId, list);
     }
-    const getAdjNet = (employeeId: string) => (adjNetByEmployee.get(employeeId) ?? []).reduce((s, a) => s + (REPORT_DEDUCTION_TYPES.includes(a.adjustmentType) ? -1 : 1) * a.amount, 0);
+    const getAdjNet = (employeeId: string) =>
+        (adjByEmployee.get(employeeId) ?? []).reduce((s, a) => s + (REPORT_DEDUCTION_TYPES.includes(a.adjustmentType) ? -1 : 1) * a.amount, 0);
 
     const totalGross = records.reduce((s, r) => s + r.grossPay, 0);
     const totalNet = records.reduce((s, r) => s + r.netPay + getAdjNet(r.employeeId), 0);
@@ -928,6 +934,7 @@ const PayrollReports: React.FC<PayrollReportsProps> = ({ records, employees, per
     const totalLate = records.reduce((s, r) => s + r.lateDeduction + r.undertimeDeduction, 0);
     const totalOT = records.reduce((s, r) => s + r.overtimePay, 0);
     const total13th = records.reduce((s, r) => s + (r.thirteenthMonthAccrued ?? 0), 0);
+    const totalAdj = records.reduce((s, r) => s + getAdjNet(r.employeeId), 0);
 
     const printReport = (title: string, htmlBody: string) => {
         const logoHTML = company?.logo
@@ -971,7 +978,6 @@ ${htmlBody}
               <td style="text-align:right;font-weight:600;">₱${netPay.toFixed(2)}</td>
             </tr>`;
         }).join('');
-        const totalAdj = records.reduce((s, r) => s + getAdjNet(r.employeeId), 0);
         printReport('Payroll Register', `<table>
           <thead><tr><th>Employee</th><th>Dept.</th><th>Days</th><th>Basic Pay</th><th>OT Pay</th><th>Absences</th><th>Tardiness</th><th>Gross</th><th>Contributions</th><th>W/Tax</th><th>Other Adj.</th><th>Net Pay</th></tr></thead>
           <tbody>${rows}</tbody>
@@ -1056,11 +1062,35 @@ ${htmlBody}
           </table>`);
     };
 
+    const printAdjustments = () => {
+        if (adjustments.length === 0) { alert('No adjustments for this period.'); return; }
+        const rows = adjustments.map(a => {
+            const e = empMap.get(a.employeeId);
+            const name = e ? `${e.lastName}, ${e.firstName}` : a.employeeId;
+            const isDeduction = REPORT_DEDUCTION_TYPES.includes(a.adjustmentType);
+            return `<tr>
+              <td>${name}</td><td>${e?.department ?? ''}</td>
+              <td>${ADJ_LABEL[a.adjustmentType] ?? a.adjustmentType}</td>
+              <td style="text-align:right;color:${isDeduction ? '#dc2626' : '#15803d'}">${isDeduction ? '-' : '+'}₱${a.amount.toFixed(2)}</td>
+              <td>${a.description}</td>
+              <td style="color:#6b7280;font-size:10px;">${new Date(a.createdAt).toLocaleDateString()}</td>
+            </tr>`;
+        }).join('');
+        const totalAdd = adjustments.filter(a => !REPORT_DEDUCTION_TYPES.includes(a.adjustmentType)).reduce((s, a) => s + a.amount, 0);
+        const totalDed = adjustments.filter(a => REPORT_DEDUCTION_TYPES.includes(a.adjustmentType)).reduce((s, a) => s + a.amount, 0);
+        printReport('Other Adjustments', `<table>
+          <thead><tr><th>Employee</th><th>Dept.</th><th>Type</th><th>Amount</th><th>Description</th><th>Date</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="3">TOTAL (${adjustments.length} entries)</td>
+            <td style="text-align:right">+₱${totalAdd.toFixed(2)} / -₱${totalDed.toFixed(2)}</td><td></td><td></td></tr></tfoot>
+        </table>`);
+    };
+
     const printAllPayslips = () => {
         const allHTML = records.map(r => {
             const e = empMap.get(r.employeeId);
             const name = e ? `${e.firstName} ${e.lastName}` : r.employeeId;
-            const empAdjs = adjNetByEmployee.get(r.employeeId) ?? [];
+            const empAdjs = adjByEmployee.get(r.employeeId) ?? [];
             return generatePayslipHTML(r, name, e?.employeeId ?? '', e?.department ?? '', period.periodName, period.payDate, company, period.payFrequency, empAdjs);
         });
         const combined = allHTML.map((h, i) =>
@@ -1080,15 +1110,300 @@ ${combined}
         { id: 'contributions' as const, label: 'Government Contributions', desc: 'SSS, PhilHealth, Pag-IBIG, and BIR withholding tax', action: printContributions },
         { id: 'attendance-cost' as const, label: 'Attendance Cost Analysis', desc: 'Absences, tardiness, and OT cost breakdown', action: printAttendanceCost },
         { id: 'thirteenth-month' as const, label: '13th Month Accrual', desc: 'Monthly accrual per employee (P.D. 851)', action: print13thMonth },
+        { id: 'adjustments' as const, label: 'Other Adjustments', desc: `Bonuses, loans, cash advances, and other entries (${adjustments.length})`, action: printAdjustments },
         { id: 'payslips-all' as const, label: 'All Payslips (Bulk)', desc: 'Print/export payslips for all employees at once', action: printAllPayslips },
     ];
 
     const selected = reportOptions.find(r => r.id === reportType)!;
 
+    // ── Dynamic preview per report type ──────────────────────────────────────
+    const renderPreview = () => {
+        if (reportType === 'payroll-register') {
+            return (
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            {['Employee', 'Days', 'Basic Pay', 'OT Pay', 'Absences', 'Tardiness', 'Gross', 'Contributions', 'W/Tax', 'Other Adj.', 'Net Pay'].map(h => (
+                                <th key={h} className="px-3 py-3 text-right first:text-left text-xs font-semibold text-gray-600">{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {records.map(r => {
+                            const e = empMap.get(r.employeeId);
+                            const tard = r.lateDeduction + r.undertimeDeduction;
+                            const adjNet = getAdjNet(r.employeeId);
+                            return (
+                                <tr key={r.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5">
+                                        <p className="font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</p>
+                                        <p className="text-xs text-gray-400">{e?.department}</p>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right text-gray-700">{r.daysWorked}</td>
+                                    <td className="px-3 py-2.5 text-right">{fmt(r.basicPay)}</td>
+                                    <td className="px-3 py-2.5 text-right text-blue-600">{r.overtimePay > 0 ? fmt(r.overtimePay) : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-500">{r.absentDeduction > 0 ? `-${fmt(r.absentDeduction)}` : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-500">{tard > 0 ? `-${fmt(tard)}` : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right font-medium">{fmt(r.grossPay)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.sssContribution + r.philhealthContribution + r.pagibigContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.withholdingTax)}</td>
+                                    <td className={`px-3 py-2.5 text-right font-medium ${adjNet > 0 ? 'text-green-600' : adjNet < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                        {adjNet !== 0 ? `${adjNet > 0 ? '+' : ''}${fmt(adjNet)}` : '—'}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmt(r.netPay + adjNet)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold text-sm">
+                        <tr>
+                            <td className="px-3 py-2.5 text-gray-900">TOTAL ({records.length})</td>
+                            <td className="px-3 py-2.5 text-right">—</td>
+                            <td className="px-3 py-2.5 text-right">{fmt(records.reduce((s,r)=>s+r.basicPay,0))}</td>
+                            <td className="px-3 py-2.5 text-right text-blue-600">{fmt(totalOT)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-600">-{fmt(totalAbsent)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-600">-{fmt(totalLate)}</td>
+                            <td className="px-3 py-2.5 text-right">{fmt(totalGross)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalSSS+totalPH+totalPIBIG)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalTax)}</td>
+                            <td className={`px-3 py-2.5 text-right ${totalAdj > 0 ? 'text-green-600' : totalAdj < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                {totalAdj !== 0 ? `${totalAdj > 0 ? '+' : ''}${fmt(totalAdj)}` : '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-green-700">{fmt(totalNet)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            );
+        }
+
+        if (reportType === 'contributions') {
+            return (
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            {['Employee', 'Dept.', 'Basic Salary', 'SSS (EE)', 'SSS (ER)', 'PhilHealth (EE)', 'PhilHealth (ER)', 'Pag-IBIG (EE)', 'Pag-IBIG (ER)', 'W/Tax'].map(h => (
+                                <th key={h} className="px-3 py-3 text-right first:text-left second:text-left text-xs font-semibold text-gray-600">{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {records.map(r => {
+                            const e = empMap.get(r.employeeId);
+                            return (
+                                <tr key={r.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5">
+                                        <p className="font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</p>
+                                    </td>
+                                    <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
+                                    <td className="px-3 py-2.5 text-right">{fmt(r.basicSalary)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.sssContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-orange-600">{fmt(r.sssContribution * 9.5 / 4.5)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.philhealthContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-orange-600">{fmt(r.philhealthContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.pagibigContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-orange-600">{fmt(r.pagibigContribution)}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.withholdingTax)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold text-sm">
+                        <tr>
+                            <td className="px-3 py-2.5" colSpan={2}>TOTAL ({records.length})</td>
+                            <td className="px-3 py-2.5 text-right">{fmt(records.reduce((s,r)=>s+r.basicSalary,0))}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalSSS)}</td>
+                            <td className="px-3 py-2.5 text-right text-orange-700">{fmt(totalSSS * 9.5 / 4.5)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalPH)}</td>
+                            <td className="px-3 py-2.5 text-right text-orange-700">{fmt(totalPH)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalPIBIG)}</td>
+                            <td className="px-3 py-2.5 text-right text-orange-700">{fmt(totalPIBIG)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalTax)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            );
+        }
+
+        if (reportType === 'attendance-cost') {
+            return (
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            {['Employee', 'Dept.', 'Days Worked', 'Absences', 'Late (min)', 'Undertime (min)', 'OT Hours', 'Absent Ded.', 'Tardiness Ded.', 'OT Pay'].map(h => (
+                                <th key={h} className="px-3 py-3 text-right first:text-left second:text-left text-xs font-semibold text-gray-600">{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {records.map(r => {
+                            const e = empMap.get(r.employeeId);
+                            const tard = r.lateDeduction + r.undertimeDeduction;
+                            return (
+                                <tr key={r.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5 font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</td>
+                                    <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
+                                    <td className="px-3 py-2.5 text-right">{r.daysWorked}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-500">{r.absentDays > 0 ? r.absentDays : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-orange-500">{r.lateMinutes > 0 ? r.lateMinutes : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-orange-500">{r.undertimeMinutes > 0 ? r.undertimeMinutes : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-blue-600">{r.overtimeHours > 0 ? r.overtimeHours.toFixed(2) : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{r.absentDeduction > 0 ? `-${fmt(r.absentDeduction)}` : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-red-600">{tard > 0 ? `-${fmt(tard)}` : '—'}</td>
+                                    <td className="px-3 py-2.5 text-right text-blue-600">{r.overtimePay > 0 ? fmt(r.overtimePay) : '—'}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold text-sm">
+                        <tr>
+                            <td className="px-3 py-2.5" colSpan={2}>TOTAL</td>
+                            <td className="px-3 py-2.5 text-right">{records.reduce((s,r)=>s+r.daysWorked,0)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">{records.reduce((s,r)=>s+r.absentDays,0)}</td>
+                            <td className="px-3 py-2.5 text-right text-orange-700">{records.reduce((s,r)=>s+r.lateMinutes,0)}</td>
+                            <td className="px-3 py-2.5 text-right text-orange-700">{records.reduce((s,r)=>s+r.undertimeMinutes,0)}</td>
+                            <td className="px-3 py-2.5 text-right text-blue-700">{records.reduce((s,r)=>s+r.overtimeHours,0).toFixed(2)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">-{fmt(totalAbsent)}</td>
+                            <td className="px-3 py-2.5 text-right text-red-700">-{fmt(totalLate)}</td>
+                            <td className="px-3 py-2.5 text-right text-blue-700">{fmt(totalOT)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            );
+        }
+
+        if (reportType === 'thirteenth-month') {
+            return (
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            {['Employee', 'Dept.', 'Monthly Basic', 'Accrual This Period', 'Formula'].map(h => (
+                                <th key={h} className="px-3 py-3 text-right first:text-left second:text-left text-xs font-semibold text-gray-600">{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {records.map(r => {
+                            const e = empMap.get(r.employeeId);
+                            const accrued = r.thirteenthMonthAccrued ?? 0;
+                            return (
+                                <tr key={r.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5 font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</td>
+                                    <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
+                                    <td className="px-3 py-2.5 text-right">{fmt(r.basicSalary)}</td>
+                                    <td className="px-3 py-2.5 text-right font-medium text-amber-700">{fmt(accrued)}</td>
+                                    <td className="px-3 py-2.5 text-xs text-gray-400">= Monthly ÷ 12</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold text-sm">
+                        <tr>
+                            <td className="px-3 py-2.5" colSpan={3}>TOTAL ACCRUAL THIS PERIOD</td>
+                            <td className="px-3 py-2.5 text-right text-amber-700">{fmt(total13th)}</td>
+                            <td />
+                        </tr>
+                    </tfoot>
+                </table>
+            );
+        }
+
+        if (reportType === 'adjustments') {
+            if (adjustments.length === 0) {
+                return <div className="py-16 text-center text-gray-400 text-sm">No adjustments recorded for this period.</div>;
+            }
+            const totalAdd = adjustments.filter(a => !REPORT_DEDUCTION_TYPES.includes(a.adjustmentType)).reduce((s, a) => s + a.amount, 0);
+            const totalDed = adjustments.filter(a => REPORT_DEDUCTION_TYPES.includes(a.adjustmentType)).reduce((s, a) => s + a.amount, 0);
+            return (
+                <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            {['Employee', 'Dept.', 'Type', 'Amount', 'Description', 'Date'].map(h => (
+                                <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600">{h}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {adjustments.map(a => {
+                            const e = empMap.get(a.employeeId);
+                            const isDeduction = REPORT_DEDUCTION_TYPES.includes(a.adjustmentType);
+                            return (
+                                <tr key={a.id} className="hover:bg-gray-50">
+                                    <td className="px-3 py-2.5 font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : a.employeeId}</td>
+                                    <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
+                                    <td className="px-3 py-2.5">
+                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${isDeduction ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                                            {ADJ_LABEL[a.adjustmentType] ?? a.adjustmentType}
+                                        </span>
+                                    </td>
+                                    <td className={`px-3 py-2.5 font-semibold ${isDeduction ? 'text-red-600' : 'text-green-600'}`}>
+                                        {isDeduction ? '-' : '+'}{fmt(a.amount)}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-gray-600">{a.description || '—'}</td>
+                                    <td className="px-3 py-2.5 text-gray-400 text-xs">{new Date(a.createdAt).toLocaleDateString()}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-semibold text-sm">
+                        <tr>
+                            <td className="px-3 py-2.5" colSpan={3}>TOTAL ({adjustments.length} entries)</td>
+                            <td className="px-3 py-2.5">
+                                <span className="text-green-700">+{fmt(totalAdd)}</span>
+                                {' / '}
+                                <span className="text-red-700">-{fmt(totalDed)}</span>
+                            </td>
+                            <td colSpan={2} />
+                        </tr>
+                    </tfoot>
+                </table>
+            );
+        }
+
+        // payslips-all: show simple summary
+        return (
+            <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                    <tr>
+                        {['Employee', 'Dept.', 'Gross Pay', 'Other Adj.', 'Net Pay'].map(h => (
+                            <th key={h} className="px-3 py-3 text-right first:text-left second:text-left text-xs font-semibold text-gray-600">{h}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                    {records.map(r => {
+                        const e = empMap.get(r.employeeId);
+                        const adjNet = getAdjNet(r.employeeId);
+                        return (
+                            <tr key={r.id} className="hover:bg-gray-50">
+                                <td className="px-3 py-2.5 font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</td>
+                                <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
+                                <td className="px-3 py-2.5 text-right">{fmt(r.grossPay)}</td>
+                                <td className={`px-3 py-2.5 text-right font-medium ${adjNet > 0 ? 'text-green-600' : adjNet < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                    {adjNet !== 0 ? `${adjNet > 0 ? '+' : ''}${fmt(adjNet)}` : '—'}
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmt(r.netPay + adjNet)}</td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+                <tfoot className="bg-gray-50 font-semibold text-sm">
+                    <tr>
+                        <td className="px-3 py-2.5" colSpan={2}>TOTAL ({records.length})</td>
+                        <td className="px-3 py-2.5 text-right">{fmt(totalGross)}</td>
+                        <td className={`px-3 py-2.5 text-right ${totalAdj > 0 ? 'text-green-700' : totalAdj < 0 ? 'text-red-700' : 'text-gray-400'}`}>
+                            {totalAdj !== 0 ? `${totalAdj > 0 ? '+' : ''}${fmt(totalAdj)}` : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-green-700">{fmt(totalNet)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        );
+    };
+
     return (
         <div className="space-y-6">
             {/* Report type selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {reportOptions.map(opt => (
                     <button key={opt.id} onClick={() => setReportType(opt.id)}
                         className={`text-left p-4 rounded-xl border transition-all ${reportType === opt.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
@@ -1113,58 +1428,19 @@ ${combined}
                 ))}
             </div>
 
-            {/* Per-employee preview table */}
+            {/* Dynamic preview table */}
             <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600">Employee</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Gross Pay</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Contributions</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">W/Tax</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">Net Pay</th>
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600">13th Mo. Accrual</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {records.map(r => {
-                            const e = empMap.get(r.employeeId);
-                            return (
-                                <tr key={r.id} className="hover:bg-gray-50">
-                                    <td className="px-3 py-2.5">
-                                        <p className="font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</p>
-                                        <p className="text-xs text-gray-400">{e?.department}</p>
-                                    </td>
-                                    <td className="px-3 py-2.5 text-right">{fmt(r.grossPay)}</td>
-                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.sssContribution + r.philhealthContribution + r.pagibigContribution)}</td>
-                                    <td className="px-3 py-2.5 text-right text-red-600">{fmt(r.withholdingTax)}</td>
-                                    <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmt(r.netPay)}</td>
-                                    <td className="px-3 py-2.5 text-right text-amber-700">{fmt(r.thirteenthMonthAccrued ?? 0)}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                    <tfoot className="bg-gray-50 font-semibold">
-                        <tr>
-                            <td className="px-3 py-2.5 text-gray-900">TOTAL ({records.length})</td>
-                            <td className="px-3 py-2.5 text-right">{fmt(totalGross)}</td>
-                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalSSS + totalPH + totalPIBIG)}</td>
-                            <td className="px-3 py-2.5 text-right text-red-700">{fmt(totalTax)}</td>
-                            <td className="px-3 py-2.5 text-right text-green-700">{fmt(totalNet)}</td>
-                            <td className="px-3 py-2.5 text-right text-amber-700">{fmt(total13th)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
+                {renderPreview()}
             </div>
 
             {/* Export button */}
             <div className="flex justify-end">
                 <button
                     onClick={selected.action}
-                    disabled={records.length === 0}
+                    disabled={records.length === 0 && reportType !== 'adjustments'}
                     className="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-40 flex items-center gap-2 shadow-sm">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Export: {selected.label}
+                    Print: {selected.label}
                 </button>
             </div>
         </div>
