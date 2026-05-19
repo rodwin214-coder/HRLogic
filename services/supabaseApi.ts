@@ -3926,10 +3926,11 @@ export const getPayrollAdjustments = async (periodId: string): Promise<PayrollAd
     try {
         await ensureUserContext();
         if (!currentCompanyId) { console.error('getPayrollAdjustments: no company ID'); return []; }
-        const { data, error } = await supabase.rpc('get_payroll_adjustments', {
-            p_company_id: currentCompanyId,
-            p_period_id:  periodId,
-        });
+        const { data, error } = await supabase
+            .from('payroll_adjustments')
+            .select('*')
+            .eq('period_id', periodId)
+            .eq('company_id', currentCompanyId);
         if (error) throw error;
         return (data ?? []).map((r: any) => ({
             id: r.id,
@@ -3956,14 +3957,16 @@ export const addPayrollAdjustment = async (adj: {
 }): Promise<void> => {
     await ensureUserContext();
     if (!currentCompanyId) throw new Error('Company ID not set');
-    const { error } = await supabase.rpc('add_payroll_adjustment', {
-        p_company_id:       currentCompanyId,
-        p_period_id:        adj.periodId,
-        p_employee_id:      adj.employeeId,
-        p_adjustment_type:  adj.adjustmentType,
-        p_amount:           adj.amount,
-        p_description:      adj.description,
-    });
+    const { error } = await supabase
+        .from('payroll_adjustments')
+        .insert({
+            company_id:      currentCompanyId,
+            period_id:       adj.periodId,
+            employee_id:     adj.employeeId,
+            adjustment_type: adj.adjustmentType,
+            amount:          adj.amount,
+            description:     adj.description,
+        });
     if (error) throw error;
 };
 
