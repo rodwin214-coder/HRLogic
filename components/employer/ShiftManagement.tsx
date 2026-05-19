@@ -40,23 +40,27 @@ const ShiftManagement: React.FC = () => {
         window.scrollTo(0, 0); // Scroll to top to see the form
     };
 
-    const handleDelete = (shiftId: string) => {
+    const handleDelete = async (shiftId: string) => {
         if (window.confirm('Are you sure you want to delete this shift?')) {
-            api.deleteShift(shiftId);
-            fetchData();
+            try {
+                await api.deleteShift(shiftId);
+                await fetchData();
+            } catch (err) {
+                alert('Could not delete shift. It may be assigned to employees.');
+            }
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isFormValid) {
             if (editingShiftId) {
-                api.updateShift({ id: editingShiftId, name, startTime, endTime });
+                await api.updateShift({ id: editingShiftId, name, startTime, endTime });
             } else {
-                api.addShift({ name, startTime, endTime });
+                await api.addShift({ name, startTime, endTime });
             }
             resetForm();
-            fetchData();
+            await fetchData();
         }
     };
 
