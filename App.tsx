@@ -6,6 +6,7 @@ import * as api from './services/supabaseApi';
 import { WORKLOGIX_LOGO_BASE64 } from './services/supabaseApi';
 import ForgotPasswordModal from './components/common/ForgotPasswordModal';
 import ResetPasswordPage from './components/common/ResetPasswordPage';
+const LandingPage = lazy(() => import('./components/LandingPage'));
 
 const EmployeeDashboard = lazy(() => import('./components/employee/EmployeeDashboard'));
 const EmployerDashboard = lazy(() => import('./components/employer/EmployerDashboard'));
@@ -32,6 +33,7 @@ const App: React.FC = () => {
         role: null,
         companyCode: ''
     });
+    const [showLanding, setShowLanding] = useState(true);
     const [isRegistering, setIsRegistering] = useState(false);
     const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -257,6 +259,17 @@ const App: React.FC = () => {
         );
     }
 
+    if (!currentUser.user && showLanding) {
+        return (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2" style={{ borderColor: 'rgb(15,44,82)' }} /></div>}>
+                <LandingPage
+                    onGetStarted={() => { setIsRegistering(true); setShowLanding(false); }}
+                    onLogin={() => { setIsRegistering(false); setShowLanding(false); }}
+                />
+            </Suspense>
+        );
+    }
+
     if (!currentUser.user) {
         return (
             <>
@@ -353,11 +366,16 @@ const App: React.FC = () => {
                                 </button>
                             </form>
 
-                            <div className="mt-6 text-sm text-slate-500 text-center">
+                            <div className="mt-6 text-sm text-slate-500 text-center space-y-2">
                                 <p>
                                     {isRegistering ? 'Already have an account?' : "Don't have a company account?"}
                                     <button onClick={() => { setIsRegistering(!isRegistering); setApiError(''); setErrors({}) }} className="font-semibold text-[rgb(var(--color-primary))] hover:opacity-80 ml-1">
                                         {isRegistering ? 'Log In' : 'Create Company'}
+                                    </button>
+                                </p>
+                                <p>
+                                    <button onClick={() => setShowLanding(true)} className="text-slate-400 hover:text-slate-600 text-xs transition-colors">
+                                        ← Back to home
                                     </button>
                                 </p>
                             </div>
