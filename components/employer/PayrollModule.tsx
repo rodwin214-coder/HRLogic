@@ -438,7 +438,7 @@ const CreatePeriodModal: React.FC<CreatePeriodModalProps> = ({ onClose, onSave }
 
                     {is13thMonth && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-                            <strong>13th Month Pay (P.D. 851)</strong> — accrual is calculated as 1/12 of the employee's annual basic salary. Each regular payroll period already records the monthly accrual. This period will sum the accruals for the full calendar year.
+                            <strong>13th Month Pay (P.D. 851)</strong> — accrual is calculated as 1/12 of the basic pay actually earned each period (absences reduce the accrual). Each regular payroll period records the accrual. This period will sum the accruals for the full calendar year.
                         </div>
                     )}
 
@@ -1167,15 +1167,15 @@ ${htmlBody}
             const accrued = r.thirteenthMonthAccrued ?? 0;
             return `<tr>
               <td>${name}</td><td>${e?.department ?? ''}</td>
-              <td style="text-align:right">₱${r.basicSalary.toFixed(2)}</td>
+              <td style="text-align:right">₱${r.basicPay.toFixed(2)}</td>
               <td style="text-align:right">₱${accrued.toFixed(2)}</td>
-              <td style="font-size:10px;color:#6b7280;padding-left:8px;">= Monthly ÷ 12</td>
+              <td style="font-size:10px;color:#6b7280;padding-left:8px;">= Basic Pay ÷ 12</td>
             </tr>`;
         }).join('');
         printReport('13th Month Pay Accrual (P.D. 851)', `
-          <p style="font-size:11px;color:#6b7280;margin-bottom:12px;">13th Month Pay accrual this period. Full year accrual = sum of all periods' monthly basic ÷ 12.</p>
+          <p style="font-size:11px;color:#6b7280;margin-bottom:12px;">13th Month Pay accrual this period (P.D. 851). Accrual = basic pay earned this period ÷ 12. Full-year 13th month = sum of all periods' accruals.</p>
           <table>
-            <thead><tr><th>Employee</th><th>Dept.</th><th>Monthly Basic</th><th>Accrual This Period</th><th>Formula</th></tr></thead>
+            <thead><tr><th>Employee</th><th>Dept.</th><th>Basic Pay (Period)</th><th>Accrual This Period</th><th>Formula</th></tr></thead>
             <tbody>${rows}</tbody>
             <tfoot><tr><td colspan="3">TOTAL ACCRUAL THIS PERIOD</td><td style="text-align:right">₱${total13th.toFixed(2)}</td><td></td></tr></tfoot>
           </table>`);
@@ -1395,7 +1395,7 @@ ${combined}
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                         <tr>
-                            {['Employee', 'Dept.', 'Monthly Basic', 'Accrual This Period', 'Formula'].map(h => (
+                            {['Employee', 'Dept.', 'Basic Pay (Period)', 'Accrual This Period', 'Formula'].map(h => (
                                 <th key={h} className="px-3 py-3 text-right first:text-left second:text-left text-xs font-semibold text-gray-600">{h}</th>
                             ))}
                         </tr>
@@ -1408,9 +1408,9 @@ ${combined}
                                 <tr key={r.id} className="hover:bg-gray-50">
                                     <td className="px-3 py-2.5 font-medium text-gray-900">{e ? `${e.lastName}, ${e.firstName}` : r.employeeId}</td>
                                     <td className="px-3 py-2.5 text-gray-500 text-xs">{e?.department}</td>
-                                    <td className="px-3 py-2.5 text-right">{fmt(r.basicSalary)}</td>
+                                    <td className="px-3 py-2.5 text-right">{fmt(r.basicPay)}</td>
                                     <td className="px-3 py-2.5 text-right font-medium text-amber-700">{fmt(accrued)}</td>
-                                    <td className="px-3 py-2.5 text-xs text-gray-400">= Monthly ÷ 12</td>
+                                    <td className="px-3 py-2.5 text-xs text-gray-400">= Basic Pay ÷ 12</td>
                                 </tr>
                             );
                         })}

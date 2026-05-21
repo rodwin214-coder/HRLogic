@@ -3423,7 +3423,9 @@ export const computeEmployeePayroll = async (params: {
     const nightDiffPay      = isPartTime ? 0 : nightDiffHours * hourlyRate * 0.10;
     const restDayPay        = isPartTime ? 0 : restDayHours * hourlyRate * 0.30;
 
-    const thirteenthMonthAccrued = monthlyBasic / 12;
+    // 13th month accrual per P.D. 851: based on actual basic pay earned this period
+    // (total basic salary received for the year ÷ 12 — absences already reduce basicPay)
+    const thirteenthMonthAccrued = basicPay / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
 
     // ── Contributions — part-time employees are exempt ───────────────────────
