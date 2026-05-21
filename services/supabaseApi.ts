@@ -37,6 +37,8 @@ import {
     PayFrequency,
     PayrollStatus,
     AdjustmentType,
+    PayrollOpeningBalance,
+    DailyAttendanceDetail,
 } from '../types';
 
 // Store current session info
@@ -2991,6 +2993,15 @@ function dbRecordToPayrollRecord(r: any): PayrollRecord {
         netPay: Number(r.net_pay),
         status: r.status,
         notes: r.notes ?? '',
+        ytdBasicPay: Number(r.ytd_basic_pay ?? 0),
+        ytdGrossPay: Number(r.ytd_gross_pay ?? 0),
+        ytdTaxableIncome: Number(r.ytd_taxable_income ?? 0),
+        ytdWithholdingTax: Number(r.ytd_withholding_tax ?? 0),
+        ytdSss: Number(r.ytd_sss ?? 0),
+        ytdPhilhealth: Number(r.ytd_philhealth ?? 0),
+        ytdPagibig: Number(r.ytd_pagibig ?? 0),
+        ytdNetPay: Number(r.ytd_net_pay ?? 0),
+        ytdThirteenthMonth: Number(r.ytd_thirteenth_month ?? 0),
     };
 }
 
@@ -3970,6 +3981,369 @@ export const addPayrollAdjustment = async (adj: {
     if (error) throw error;
 };
 
-// Note: This is a starter implementation. You'll need to implement additional functions
-// based on your application's needs. The key functions for authentication and basic
-// employee management are provided above.
+// ─── Opening Balances ────────────────────────────────────────────────────────
+
+export const getOpeningBalance = async (employeeId: string, year: number): Promise<PayrollOpeningBalance | null> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) return null;
+        const { data, error } = await supabase
+            .from('payroll_opening_balances')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .eq('employee_id', employeeId)
+            .eq('year', year)
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) return null;
+        return {
+            id: data.id,
+            companyId: data.company_id,
+            employeeId: data.employee_id,
+            year: data.year,
+            obBasicPay: Number(data.ob_basic_pay ?? 0),
+            obGrossPay: Number(data.ob_gross_pay ?? 0),
+            obTaxableIncome: Number(data.ob_taxable_income ?? 0),
+            obWithholdingTax: Number(data.ob_withholding_tax ?? 0),
+            obSss: Number(data.ob_sss ?? 0),
+            obPhilhealth: Number(data.ob_philhealth ?? 0),
+            obPagibig: Number(data.ob_pagibig ?? 0),
+            obNetPay: Number(data.ob_net_pay ?? 0),
+            obThirteenthMonth: Number(data.ob_thirteenth_month ?? 0),
+            notes: data.notes ?? '',
+        };
+    } catch (err) {
+        console.error('getOpeningBalance error:', err);
+        return null;
+    }
+};
+
+export const getAllOpeningBalances = async (year: number): Promise<PayrollOpeningBalance[]> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) return [];
+        const { data, error } = await supabase
+            .from('payroll_opening_balances')
+            .select('*')
+            .eq('company_id', currentCompanyId)
+            .eq('year', year);
+        if (error) throw error;
+        return (data ?? []).map((d: any) => ({
+            id: d.id,
+            companyId: d.company_id,
+            employeeId: d.employee_id,
+            year: d.year,
+            obBasicPay: Number(d.ob_basic_pay ?? 0),
+            obGrossPay: Number(d.ob_gross_pay ?? 0),
+            obTaxableIncome: Number(d.ob_taxable_income ?? 0),
+            obWithholdingTax: Number(d.ob_withholding_tax ?? 0),
+            obSss: Number(d.ob_sss ?? 0),
+            obPhilhealth: Number(d.ob_philhealth ?? 0),
+            obPagibig: Number(d.ob_pagibig ?? 0),
+            obNetPay: Number(d.ob_net_pay ?? 0),
+            obThirteenthMonth: Number(d.ob_thirteenth_month ?? 0),
+            notes: d.notes ?? '',
+        }));
+    } catch (err) {
+        console.error('getAllOpeningBalances error:', err);
+        return [];
+    }
+};
+
+export const upsertOpeningBalance = async (ob: PayrollOpeningBalance): Promise<void> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) throw new Error('Company ID not set');
+        const { error } = await supabase
+            .from('payroll_opening_balances')
+            .upsert({
+                company_id: currentCompanyId,
+                employee_id: ob.employeeId,
+                year: ob.year,
+                ob_basic_pay: ob.obBasicPay,
+                ob_gross_pay: ob.obGrossPay,
+                ob_taxable_income: ob.obTaxableIncome,
+                ob_withholding_tax: ob.obWithholdingTax,
+                ob_sss: ob.obSss,
+                ob_philhealth: ob.obPhilhealth,
+                ob_pagibig: ob.obPagibig,
+                ob_net_pay: ob.obNetPay,
+                ob_thirteenth_month: ob.obThirteenthMonth,
+                notes: ob.notes,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'company_id,employee_id,year' });
+        if (error) throw error;
+    } catch (err) {
+        console.error('upsertOpeningBalance error:', err);
+        throw err;
+    }
+};
+
+// ─── Per-Day Attendance Detail for Payroll Breakdown ─────────────────────────
+
+export const getAttendanceDetailForPeriod = async (params: {
+    employeeId: string;
+    periodStart: string;
+    periodEnd: string;
+    shift: Shift | null;
+    workSchedule: WorkSchedule;
+    gracePeriodMinutes: number;
+    holidays: Holiday[];
+}): Promise<DailyAttendanceDetail[]> => {
+    const { employeeId, periodStart, periodEnd, shift, workSchedule, gracePeriodMinutes, holidays } = params;
+
+    const [{ data: rawRecords }, { data: rawOTRequests }, { data: rawLeaveRequests }] = await Promise.all([
+        supabase.from('attendance_records').select('*').eq('employee_id', employeeId)
+            .gte('clock_in_time', `${periodStart}T00:00:00+08:00`)
+            .lte('clock_in_time', `${periodEnd}T23:59:59+08:00`),
+        supabase.from('requests').select('*').eq('employee_id', employeeId)
+            .eq('request_type', 'Overtime').eq('status', 'Approved')
+            .gte('date', periodStart).lte('date', periodEnd),
+        supabase.from('requests').select('*').eq('employee_id', employeeId)
+            .eq('request_type', 'Leave').eq('status', 'Approved')
+            .lte('start_date', periodEnd).gte('end_date', periodStart),
+    ]);
+
+    const holidayMap: Record<string, { type: 'Regular' | 'Special'; name: string }> = {};
+    for (const h of holidays) holidayMap[h.date] = { type: h.type, name: h.name };
+
+    const approvedOT: Record<string, { hours: number; holidayType?: string }> = {};
+    for (const r of (rawOTRequests ?? [])) {
+        const date = r.date as string;
+        const prev = approvedOT[date];
+        approvedOT[date] = {
+            hours: (prev?.hours ?? 0) + parseFloat(r.hours ?? 0),
+            holidayType: r.holiday_type ?? holidayMap[date]?.type ?? prev?.holidayType,
+        };
+    }
+
+    const approvedLeaveDates = new Map<string, string>();
+    const unpaidLeaveDates = new Set<string>();
+    for (const r of (rawLeaveRequests ?? [])) {
+        const isUnpaid = (r.leave_type as string)?.toLowerCase().includes('unpaid');
+        for (const d of dateRange(r.start_date, r.end_date)) {
+            if (d >= periodStart && d <= periodEnd) {
+                if (isUnpaid) unpaidLeaveDates.add(d);
+                else approvedLeaveDates.set(d, r.leave_type ?? 'Leave');
+            }
+        }
+    }
+
+    // Group raw attendance by local date
+    const byDate: Record<string, { clockInMin: number; clockOutMin: number | null; clockInRaw: string; clockOutRaw: string | null }> = {};
+    for (const rec of (rawRecords ?? [])) {
+        const cin = new Date(rec.clock_in_time);
+        const cout = rec.clock_out_time ? new Date(rec.clock_out_time) : null;
+        const dateKey = localDateStr(cin);
+        const cinMin = cin.getHours() * 60 + cin.getMinutes();
+        const coutMin = cout ? cout.getHours() * 60 + cout.getMinutes() : null;
+        if (!byDate[dateKey]) {
+            byDate[dateKey] = { clockInMin: cinMin, clockOutMin: coutMin, clockInRaw: rec.clock_in_time, clockOutRaw: rec.clock_out_time };
+        } else {
+            if (cinMin < byDate[dateKey].clockInMin) { byDate[dateKey].clockInMin = cinMin; byDate[dateKey].clockInRaw = rec.clock_in_time; }
+            if (coutMin !== null && (byDate[dateKey].clockOutMin === null || coutMin > byDate[dateKey].clockOutMin!)) {
+                byDate[dateKey].clockOutMin = coutMin; byDate[dateKey].clockOutRaw = rec.clock_out_time;
+            }
+        }
+    }
+
+    const workDayNums = workingDayNumbers(workSchedule);
+    const shiftStartMin = shift ? timeToMinutes(shift.startTime) : 8 * 60;
+    const shiftEndMin = shift ? timeToMinutes(shift.endTime) : 17 * 60;
+    const graceDeadline = shiftStartMin + gracePeriodMinutes;
+    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    const result: DailyAttendanceDetail[] = [];
+
+    for (const date of dateRange(periodStart, periodEnd)) {
+        const dayOfWeekNum = new Date(date + 'T00:00:00').getDay();
+        const isWorkDay = workDayNums.includes(dayOfWeekNum);
+        const holiday = holidayMap[date];
+        const attended = byDate[date];
+        const leaveType = approvedLeaveDates.get(date);
+        const isOnLeave = !!leaveType;
+        const isOnUnpaidLeave = unpaidLeaveDates.has(date);
+        const otRequest = approvedOT[date];
+
+        let status: DailyAttendanceDetail['status'];
+        let lateMin = 0, undertimeMin = 0, otHours = 0, hoursWorked = 0;
+
+        if (holiday?.type === 'Regular' && !attended) {
+            status = 'Holiday';
+        } else if (isOnLeave && !attended) {
+            status = 'Leave';
+        } else if (!attended) {
+            status = isWorkDay && !holiday ? 'Absent' : (!isWorkDay ? 'Rest Day' : 'Holiday');
+        } else {
+            const { clockInMin, clockOutMin } = attended;
+            const effectiveClockOut = clockOutMin ?? shiftEndMin;
+            const clockOutForRegular = Math.min(effectiveClockOut, shiftEndMin);
+            hoursWorked = Math.max(0, clockOutForRegular - clockInMin) / 60;
+            if (otRequest) hoursWorked += otRequest.hours;
+            if (isWorkDay && clockInMin > graceDeadline) lateMin = clockInMin - shiftStartMin;
+            if (clockOutMin !== null && clockOutMin < shiftEndMin && isWorkDay && !otRequest) undertimeMin = shiftEndMin - clockOutMin;
+            otHours = otRequest?.hours ?? 0;
+            status = !isWorkDay ? 'Rest Day Worked' : 'Present';
+        }
+
+        const fmtMin = (m: number) => {
+            const h = Math.floor(m / 60);
+            const min = m % 60;
+            return h > 0 ? `${h}h ${min}m` : `${min}m`;
+        };
+        const fmtTime = (raw: string | null | undefined) => {
+            if (!raw) return undefined;
+            const d = new Date(raw);
+            const hh = d.getHours().toString().padStart(2, '0');
+            const mm = d.getMinutes().toString().padStart(2, '0');
+            return `${hh}:${mm}`;
+        };
+
+        result.push({
+            date,
+            dayOfWeek: DAY_NAMES[dayOfWeekNum],
+            isWorkDay,
+            isHoliday: !!holiday,
+            holidayType: holiday?.type,
+            holidayName: holiday?.name,
+            isOnLeave,
+            leaveType: leaveType ?? (isOnUnpaidLeave ? 'Unpaid Leave' : undefined),
+            clockIn: attended ? fmtTime(attended.clockInRaw) : undefined,
+            clockOut: attended ? fmtTime(attended.clockOutRaw) : undefined,
+            status,
+            lateMinutes: Math.round(lateMin),
+            undertimeMinutes: Math.round(undertimeMin),
+            otHours: Math.round(otHours * 100) / 100,
+            hoursWorked: Math.round(hoursWorked * 100) / 100,
+        });
+    }
+
+    return result;
+};
+
+// ─── YTD Aggregation ─────────────────────────────────────────────────────────
+
+export const getYTDForEmployee = async (employeeId: string, year: number): Promise<{
+    ytdBasicPay: number; ytdGrossPay: number; ytdTaxableIncome: number;
+    ytdWithholdingTax: number; ytdSss: number; ytdPhilhealth: number;
+    ytdPagibig: number; ytdNetPay: number; ytdThirteenthMonth: number;
+    periodCount: number;
+} & { ob: PayrollOpeningBalance | null }> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) throw new Error('No company');
+
+        // All paid/finalized periods for this year
+        const { data: periods } = await supabase
+            .from('payroll_periods')
+            .select('id, period_start')
+            .eq('company_id', currentCompanyId)
+            .in('status', ['Finalized', 'Paid'])
+            .gte('period_start', `${year}-01-01`)
+            .lte('period_start', `${year}-12-31`);
+
+        const periodIds = (periods ?? []).map((p: any) => p.id);
+        let records: any[] = [];
+        if (periodIds.length > 0) {
+            const { data } = await supabase
+                .from('payroll_records')
+                .select('*')
+                .eq('company_id', currentCompanyId)
+                .eq('employee_id', employeeId)
+                .in('period_id', periodIds);
+            records = data ?? [];
+        }
+
+        const ob = await getOpeningBalance(employeeId, year);
+
+        const sum = (field: string) => records.reduce((s: number, r: any) => s + Number(r[field] ?? 0), 0);
+
+        return {
+            ytdBasicPay: (ob?.obBasicPay ?? 0) + sum('basic_pay'),
+            ytdGrossPay: (ob?.obGrossPay ?? 0) + sum('gross_pay'),
+            ytdTaxableIncome: (ob?.obTaxableIncome ?? 0) + sum('taxable_income'),
+            ytdWithholdingTax: (ob?.obWithholdingTax ?? 0) + sum('withholding_tax'),
+            ytdSss: (ob?.obSss ?? 0) + sum('sss_contribution'),
+            ytdPhilhealth: (ob?.obPhilhealth ?? 0) + sum('philhealth_contribution'),
+            ytdPagibig: (ob?.obPagibig ?? 0) + sum('pagibig_contribution'),
+            ytdNetPay: (ob?.obNetPay ?? 0) + sum('net_pay'),
+            ytdThirteenthMonth: (ob?.obThirteenthMonth ?? 0) + sum('thirteenth_month_accrued'),
+            periodCount: records.length,
+            ob,
+        };
+    } catch (err) {
+        console.error('getYTDForEmployee error:', err);
+        return { ytdBasicPay: 0, ytdGrossPay: 0, ytdTaxableIncome: 0, ytdWithholdingTax: 0, ytdSss: 0, ytdPhilhealth: 0, ytdPagibig: 0, ytdNetPay: 0, ytdThirteenthMonth: 0, periodCount: 0, ob: null };
+    }
+};
+
+export const getAllYTDRecords = async (year: number): Promise<Array<{
+    employeeId: string;
+    ytdBasicPay: number; ytdGrossPay: number; ytdTaxableIncome: number;
+    ytdWithholdingTax: number; ytdSss: number; ytdPhilhealth: number;
+    ytdPagibig: number; ytdNetPay: number; ytdThirteenthMonth: number;
+    periodCount: number;
+}>> => {
+    try {
+        await ensureUserContext();
+        if (!currentCompanyId) return [];
+
+        const { data: periods } = await supabase
+            .from('payroll_periods')
+            .select('id')
+            .eq('company_id', currentCompanyId)
+            .in('status', ['Finalized', 'Paid'])
+            .gte('period_start', `${year}-01-01`)
+            .lte('period_start', `${year}-12-31`);
+
+        const periodIds = (periods ?? []).map((p: any) => p.id);
+        let records: any[] = [];
+        if (periodIds.length > 0) {
+            const { data } = await supabase
+                .from('payroll_records')
+                .select('employee_id, basic_pay, gross_pay, taxable_income, withholding_tax, sss_contribution, philhealth_contribution, pagibig_contribution, net_pay, thirteenth_month_accrued')
+                .eq('company_id', currentCompanyId)
+                .in('period_id', periodIds);
+            records = data ?? [];
+        }
+
+        const obs = await getAllOpeningBalances(year);
+        const obMap = new Map(obs.map(ob => [ob.employeeId, ob]));
+
+        // Group by employee
+        const byEmployee: Record<string, any> = {};
+        for (const r of records) {
+            const eid = r.employee_id;
+            if (!byEmployee[eid]) byEmployee[eid] = { employeeId: eid, ytdBasicPay: 0, ytdGrossPay: 0, ytdTaxableIncome: 0, ytdWithholdingTax: 0, ytdSss: 0, ytdPhilhealth: 0, ytdPagibig: 0, ytdNetPay: 0, ytdThirteenthMonth: 0, periodCount: 0 };
+            byEmployee[eid].ytdBasicPay += Number(r.basic_pay ?? 0);
+            byEmployee[eid].ytdGrossPay += Number(r.gross_pay ?? 0);
+            byEmployee[eid].ytdTaxableIncome += Number(r.taxable_income ?? 0);
+            byEmployee[eid].ytdWithholdingTax += Number(r.withholding_tax ?? 0);
+            byEmployee[eid].ytdSss += Number(r.sss_contribution ?? 0);
+            byEmployee[eid].ytdPhilhealth += Number(r.philhealth_contribution ?? 0);
+            byEmployee[eid].ytdPagibig += Number(r.pagibig_contribution ?? 0);
+            byEmployee[eid].ytdNetPay += Number(r.net_pay ?? 0);
+            byEmployee[eid].ytdThirteenthMonth += Number(r.thirteenth_month_accrued ?? 0);
+            byEmployee[eid].periodCount += 1;
+        }
+
+        // Merge in opening balances
+        for (const [eid, ob] of obMap) {
+            if (!byEmployee[eid]) byEmployee[eid] = { employeeId: eid, ytdBasicPay: 0, ytdGrossPay: 0, ytdTaxableIncome: 0, ytdWithholdingTax: 0, ytdSss: 0, ytdPhilhealth: 0, ytdPagibig: 0, ytdNetPay: 0, ytdThirteenthMonth: 0, periodCount: 0 };
+            byEmployee[eid].ytdBasicPay += ob.obBasicPay;
+            byEmployee[eid].ytdGrossPay += ob.obGrossPay;
+            byEmployee[eid].ytdTaxableIncome += ob.obTaxableIncome;
+            byEmployee[eid].ytdWithholdingTax += ob.obWithholdingTax;
+            byEmployee[eid].ytdSss += ob.obSss;
+            byEmployee[eid].ytdPhilhealth += ob.obPhilhealth;
+            byEmployee[eid].ytdPagibig += ob.obPagibig;
+            byEmployee[eid].ytdNetPay += ob.obNetPay;
+            byEmployee[eid].ytdThirteenthMonth += ob.obThirteenthMonth;
+        }
+
+        return Object.values(byEmployee);
+    } catch (err) {
+        console.error('getAllYTDRecords error:', err);
+        return [];
+    }
+};

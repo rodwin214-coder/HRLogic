@@ -11,7 +11,11 @@ import {
     getDeMinimisForPeriodEmployee, upsertDeMinimisItem, deleteDeMinimisItem,
     DE_MINIMIS_CEILINGS, markEmployeesPaid,
     getEmployees, getShifts, getHolidays, getCompanyProfile,
+    getAttendanceDetailForPeriod,
+    getOpeningBalance, upsertOpeningBalance, getAllYTDRecords,
 } from '../../services/supabaseApi';
+import { DailyAttendanceDetail, PayrollOpeningBalance } from '../../types';
+import AnnualReports from './AnnualReports';
 import { generatePayslipHTML, openPayslip } from '../../services/payslipUtils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -34,13 +38,39 @@ interface PayrollBreakdownModalProps {
     employeeId: string;
     department: string;
     periodName: string;
+    periodStart: string;
+    periodEnd: string;
     payDate: string;
     payFrequency: PayFrequency;
     company: CompanyProfile | null;
+    shifts: Shift[];
+    holidays: Holiday[];
+    workSchedule: WorkSchedule;
+    gracePeriodMinutes: number;
     onClose: () => void;
 }
 
-const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, payDate, payFrequency, company, onClose }) => {
+const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r, employeeName, employeeId, department, periodName, periodStart, periodEnd, payDate, payFrequency, company, shifts, holidays, workSchedule, gracePeriodMinutes, onClose }) => {
+    const [activeTab, setActiveTab] = useState<'computation' | 'attendance'>('computation');
+    const [attendanceDetails, setAttendanceDetails] = useState<DailyAttendanceDetail[]>([]);
+    const [loadingAttendance, setLoadingAttendance] = useState(false);
+
+    const empShift = shifts.find(s => s.id === (r as any).shiftId) ?? shifts[0] ?? null;
+
+    useEffect(() => {
+        if (activeTab === 'attendance' && attendanceDetails.length === 0) {
+            setLoadingAttendance(true);
+            getAttendanceDetailForPeriod({
+                employeeId: r.employeeId,
+                periodStart,
+                periodEnd,
+                shift: empShift,
+                workSchedule,
+                gracePeriodMinutes,
+                holidays,
+            }).then(d => { setAttendanceDetails(d); setLoadingAttendance(false); });
+        }
+    }, [activeTab]);
     const benefitDivisor = payFrequency === 'semi-monthly' ? 2 : 1;
     const dailyRate = r.dailyRate;
     const hourlyRate = dailyRate / 8;
@@ -168,9 +198,21 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
         </div>
     );
 
+    const statusBadge = (s: DailyAttendanceDetail['status']) => {
+        const map: Record<string, string> = {
+            'Present': 'bg-green-100 text-green-700',
+            'Absent': 'bg-red-100 text-red-700',
+            'Leave': 'bg-blue-100 text-blue-700',
+            'Holiday': 'bg-amber-100 text-amber-700',
+            'Rest Day': 'bg-gray-100 text-gray-500',
+            'Rest Day Worked': 'bg-teal-100 text-teal-700',
+        };
+        return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[s] ?? 'bg-gray-100 text-gray-500'}`}>{s}</span>;
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Payroll Breakdown</h2>
@@ -179,7 +221,82 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex border-b bg-gray-50 flex-shrink-0">
+                    {[['computation', 'Pay Computation'], ['attendance', 'Daily Attendance']].map(([id, label]) => (
+                        <button key={id} onClick={() => setActiveTab(id as any)}
+                            className={`px-5 py-2.5 text-sm font-medium transition-colors border-b-2 ${activeTab === id ? 'border-blue-500 text-blue-700 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="overflow-y-auto flex-1 p-5 space-y-4">
+                {activeTab === 'attendance' ? (
+                    loadingAttendance ? (
+                        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
+                    ) : (
+                        <div className="space-y-3">
+                            {/* Summary chips */}
+                            <div className="flex flex-wrap gap-2 mb-1">
+                                {[
+                                    { label: 'Present', val: attendanceDetails.filter(d => d.status === 'Present' || d.status === 'Rest Day Worked').length, color: 'bg-green-50 text-green-700 border-green-200' },
+                                    { label: 'Absent', val: attendanceDetails.filter(d => d.status === 'Absent').length, color: 'bg-red-50 text-red-700 border-red-200' },
+                                    { label: 'Leave', val: attendanceDetails.filter(d => d.status === 'Leave').length, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                    { label: 'Holiday', val: attendanceDetails.filter(d => d.status === 'Holiday').length, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+                                    { label: 'Late Days', val: attendanceDetails.filter(d => d.lateMinutes > 0).length, color: 'bg-orange-50 text-orange-700 border-orange-200' },
+                                    { label: 'OT Days', val: attendanceDetails.filter(d => d.otHours > 0).length, color: 'bg-teal-50 text-teal-700 border-teal-200' },
+                                ].map(c => (
+                                    <div key={c.label} className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold ${c.color}`}>
+                                        <span>{c.label}</span>
+                                        <span className="font-bold">{c.val}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Per-day table */}
+                            <div className="rounded-xl border border-gray-200 overflow-hidden">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            {['Date', 'Day', 'Status', 'Clock In', 'Clock Out', 'Late', 'Undertime', 'OT Hrs', 'Hrs'].map(h => (
+                                                <th key={h} className="px-2.5 py-2 text-left font-semibold text-gray-500">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {attendanceDetails.map(d => (
+                                            <tr key={d.date} className={`${d.status === 'Rest Day' ? 'bg-gray-50/50' : d.status === 'Holiday' ? 'bg-amber-50/30' : 'hover:bg-gray-50'}`}>
+                                                <td className="px-2.5 py-2 font-medium text-gray-800">{d.date.slice(5)}</td>
+                                                <td className="px-2.5 py-2 text-gray-500">{d.dayOfWeek}</td>
+                                                <td className="px-2.5 py-2">
+                                                    {statusBadge(d.status)}
+                                                    {d.holidayName && <div className="text-gray-400 text-xs mt-0.5">{d.holidayName}</div>}
+                                                    {d.leaveType && d.status === 'Leave' && <div className="text-gray-400 text-xs mt-0.5">{d.leaveType}</div>}
+                                                </td>
+                                                <td className="px-2.5 py-2 font-mono text-gray-700">{d.clockIn ?? '—'}</td>
+                                                <td className="px-2.5 py-2 font-mono text-gray-700">{d.clockOut ?? '—'}</td>
+                                                <td className="px-2.5 py-2 text-orange-600 font-medium">{d.lateMinutes > 0 ? `${d.lateMinutes}m` : '—'}</td>
+                                                <td className="px-2.5 py-2 text-orange-600 font-medium">{d.undertimeMinutes > 0 ? `${d.undertimeMinutes}m` : '—'}</td>
+                                                <td className="px-2.5 py-2 text-teal-600 font-medium">{d.otHours > 0 ? d.otHours.toFixed(1) : '—'}</td>
+                                                <td className="px-2.5 py-2 text-gray-600">{d.hoursWorked > 0 ? d.hoursWorked.toFixed(1) : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-gray-50 font-semibold">
+                                        <tr>
+                                            <td className="px-2.5 py-2" colSpan={5}>TOTALS</td>
+                                            <td className="px-2.5 py-2 text-orange-700">{attendanceDetails.reduce((s,d)=>s+d.lateMinutes,0)}m</td>
+                                            <td className="px-2.5 py-2 text-orange-700">{attendanceDetails.reduce((s,d)=>s+d.undertimeMinutes,0)}m</td>
+                                            <td className="px-2.5 py-2 text-teal-700">{attendanceDetails.reduce((s,d)=>s+d.otHours,0).toFixed(1)}</td>
+                                            <td className="px-2.5 py-2 text-gray-700">{attendanceDetails.reduce((s,d)=>s+d.hoursWorked,0).toFixed(1)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    )
+                ) : (
+                    <>
                     {/* Basic */}
                     <Section title="Basic Pay" accent="border-blue-200" rows={earningsRows} />
 
@@ -226,6 +343,8 @@ const PayrollBreakdownModal: React.FC<PayrollBreakdownModalProps> = ({ record: r
                         </div>
                         <p className="text-2xl font-bold text-white tabular-nums">{fmt(r.netPay)}</p>
                     </div>
+                    </>
+                )}
                 </div>
 
                 <div className="flex justify-between px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
@@ -1999,9 +2118,15 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                         employeeId={e?.employeeId ?? ''}
                         department={e?.department ?? ''}
                         periodName={period.periodName}
+                        periodStart={period.periodStart}
+                        periodEnd={period.periodEnd}
                         payDate={period.payDate}
                         payFrequency={period.payFrequency}
                         company={company}
+                        shifts={shifts}
+                        holidays={holidays}
+                        workSchedule={companySchedule}
+                        gracePeriodMinutes={gracePeriodMinutes}
                         onClose={() => setBreakdownRecord(null)}
                     />
                 );
@@ -2039,17 +2164,20 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
 const PayrollModule: React.FC = () => {
     const [periods, setPeriods] = useState<PayrollPeriod[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [company, setCompany] = useState<CompanyProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<PayrollStatus | 'All'>('All');
+    const [view, setView] = useState<'periods' | 'annual'>('periods');
 
     const loadAll = useCallback(async () => {
         setLoading(true);
-        const [perds, emps] = await Promise.all([getPayrollPeriods(), getEmployees()]);
+        const [perds, emps, co] = await Promise.all([getPayrollPeriods(), getEmployees(), getCompanyProfile()]);
         setPeriods(perds);
         setEmployees(emps);
+        if (co) setCompany(co);
         setLoading(false);
     }, []);
 
@@ -2083,6 +2211,20 @@ const PayrollModule: React.FC = () => {
         );
     }
 
+    if (view === 'annual') {
+        return (
+            <div>
+                <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => setView('periods')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        Back to Payroll
+                    </button>
+                </div>
+                <AnnualReports employees={employees} company={company} />
+            </div>
+        );
+    }
+
     return (
         <div>
             {/* Header */}
@@ -2091,10 +2233,17 @@ const PayrollModule: React.FC = () => {
                     <h2 className="text-2xl font-bold text-gray-900">Payroll</h2>
                     <p className="text-sm text-gray-500 mt-0.5">PH-compliant · SSS · PhilHealth · Pag-IBIG · BIR TRAIN Law</p>
                 </div>
-                <button onClick={() => setShowCreateModal(true)}
-                    className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
-                    + New Period
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setView('annual')}
+                        className="px-4 py-2 text-sm font-semibold rounded-xl border-2 hover:bg-gray-50 transition-colors"
+                        style={{ borderColor: 'rgb(15,44,82)', color: 'rgb(15,44,82)' }}>
+                        Annual Reports
+                    </button>
+                    <button onClick={() => setShowCreateModal(true)}
+                        className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
+                        + New Period
+                    </button>
+                </div>
             </div>
 
             {/* Compliance badges */}

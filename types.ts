@@ -349,6 +349,51 @@ export interface PayrollRecord {
     netPay: number;
     status: PayrollStatus;
     notes: string;
+    // YTD snapshots (computed at generation time)
+    ytdBasicPay?: number;
+    ytdGrossPay?: number;
+    ytdTaxableIncome?: number;
+    ytdWithholdingTax?: number;
+    ytdSss?: number;
+    ytdPhilhealth?: number;
+    ytdPagibig?: number;
+    ytdNetPay?: number;
+    ytdThirteenthMonth?: number;
+}
+
+export interface PayrollOpeningBalance {
+    id?: string;
+    companyId: string;
+    employeeId: string;
+    year: number;
+    obBasicPay: number;
+    obGrossPay: number;
+    obTaxableIncome: number;
+    obWithholdingTax: number;
+    obSss: number;
+    obPhilhealth: number;
+    obPagibig: number;
+    obNetPay: number;
+    obThirteenthMonth: number;
+    notes: string;
+}
+
+export interface DailyAttendanceDetail {
+    date: string;
+    dayOfWeek: string;
+    isWorkDay: boolean;
+    isHoliday: boolean;
+    holidayType?: 'Regular' | 'Special';
+    holidayName?: string;
+    isOnLeave: boolean;
+    leaveType?: string;
+    clockIn?: string;
+    clockOut?: string;
+    status: 'Present' | 'Absent' | 'Leave' | 'Holiday' | 'Rest Day' | 'Rest Day Worked';
+    lateMinutes: number;
+    undertimeMinutes: number;
+    otHours: number;
+    hoursWorked: number;
 }
 
 export interface PayrollAdjustment {
