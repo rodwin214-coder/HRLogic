@@ -146,107 +146,48 @@ export const registerEmployer = async (
     password: string
 ): Promise<{ user: Employee; role: UserRole } | { error: string }> => {
     try {
-        // Check if company code already exists
-        const existingCompany = await getCompanyByCode(companyCode);
-        if (existingCompany) {
-            return { error: 'Company code already exists. Please choose a different code.' };
-        }
-
         // Hash password
         const passwordHash = await bcrypt.hash(password, 10);
 
-        // Create company
-        const { data: newCompany, error: companyError } = await supabase
-            .from('companies')
-            .insert([{
-                company_code: companyCode,
-                name: companyName,
-                work_schedule: WorkSchedule.MONDAY_TO_FRIDAY,
-            }])
-            .select()
-            .single();
+        // Single atomic SECURITY DEFINER function handles all inserts, bypassing RLS
+        // (no user_accounts row exists yet during registration)
+        const { data: result, error: rpcError } = await supabase.rpc('register_employer', {
+            p_company_code:  companyCode,
+            p_company_name:  companyName,
+            p_first_name:    firstName,
+            p_last_name:     lastName,
+            p_email:         email,
+            p_password_hash: passwordHash,
+        });
 
-        if (companyError) throw companyError;
-        currentCompanyId = newCompany.id;
+        if (rpcError) {
+            // Surface friendly messages for known guard conditions
+            const msg: string = rpcError.message ?? '';
+            if (msg.includes('DUPLICATE_COMPANY_CODE')) {
+                return { error: 'Company code already exists. Please choose a different code.' };
+            }
+            if (msg.includes('DUPLICATE_EMAIL')) {
+                return { error: 'An account with this email already exists.' };
+            }
+            throw rpcError;
+        }
 
-        // Create default shifts for the company (admin client bypasses RLS — no user context yet)
-        const { data: shifts, error: shiftsError } = await supabaseAdmin.from('shifts').insert([
-            {
-                company_id: newCompany.id,
-                name: 'Morning Shift',
-                start_time: '09:00',
-                end_time: '18:00',
-            },
-            {
-                company_id: newCompany.id,
-                name: 'Night Shift',
-                start_time: '22:00',
-                end_time: '07:00',
-            },
-        ]).select();
+        const { company_id, employee_id } = result as { company_id: string; employee_id: string; email: string };
 
-        if (shiftsError) throw shiftsError;
-
-        // Get the default shift
-        const defaultShift = shifts && shifts.length > 0 ? shifts[0] : null;
-
-        // Generate employee ID
-        const employeeId = await generateNextEmployeeId(newCompany.id);
-
-        // Create employee record for the employer (admin client — no user_accounts row exists yet)
-        const { data: newEmployee, error: employeeError } = await supabaseAdmin
-            .from('employees')
-            .insert([{
-                company_id: newCompany.id,
-                employee_id: employeeId,
-                email,
-                first_name: firstName,
-                last_name: lastName,
-                department: 'Management',
-                date_hired: new Date().toISOString().split('T')[0],
-                status: EmployeeStatus.ACTIVE,
-                employment_type: EmploymentType.FULL_TIME,
-                shift_id: defaultShift?.id || null,
-                work_schedule: WorkSchedule.MONDAY_TO_FRIDAY,
-            }])
-            .select()
-            .single();
-
-        if (employeeError) throw employeeError;
-
-        // Create salary history
-        await supabaseAdmin.from('salary_history').insert([{
-            employee_id: newEmployee.id,
-            effective_date: new Date().toISOString().split('T')[0],
-            basic_salary: 50000,
-            allowance: 0,
-            other_benefits: 0,
-        }]);
-
-        // Create user account
-        await supabaseAdmin.from('user_accounts').insert([{
-            company_id: newCompany.id,
-            email,
-            password_hash: passwordHash,
-            role: UserRole.EMPLOYER,
-            employee_id: newEmployee.id,
-        }]);
-
-        // Create default leave policy
-        await supabaseAdmin.from('leave_policies').insert([{
-            company_id: newCompany.id,
-            base_vacation_days_per_year: 15,
-            base_sick_days_per_year: 10,
-            tenure_bonus_enabled: true,
-            tenure_bonus_years_interval: 2,
-            max_tenure_bonus_days: 5,
-        }]);
-
-        // Set current user email for RLS
+        currentCompanyId = company_id;
         await setCurrentUserEmail(email);
+        await ensureUserContext();
 
-        // Convert to Employee type
-        const employee: Employee = await convertDbEmployeeToEmployee(newEmployee);
+        // Fetch the full employee record to build the session
+        const { data: empRow, error: empFetchError } = await supabase
+            .from('employees')
+            .select('*')
+            .eq('id', employee_id)
+            .single();
+
+        if (empFetchError || !empRow) throw empFetchError ?? new Error('Employee record not found after registration');
+
+        const employee: Employee = await convertDbEmployeeToEmployee(empRow);
         return { user: employee, role: UserRole.EMPLOYER };
     } catch (error: any) {
         console.error('Registration error:', error);
