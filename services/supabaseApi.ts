@@ -169,8 +169,8 @@ export const registerEmployer = async (
         if (companyError) throw companyError;
         currentCompanyId = newCompany.id;
 
-        // Create default shifts for the company
-        const { data: shifts, error: shiftsError } = await supabase.from('shifts').insert([
+        // Create default shifts for the company (admin client bypasses RLS — no user context yet)
+        const { data: shifts, error: shiftsError } = await supabaseAdmin.from('shifts').insert([
             {
                 company_id: newCompany.id,
                 name: 'Morning Shift',
@@ -193,8 +193,8 @@ export const registerEmployer = async (
         // Generate employee ID
         const employeeId = await generateNextEmployeeId(newCompany.id);
 
-        // Create employee record for the employer
-        const { data: newEmployee, error: employeeError } = await supabase
+        // Create employee record for the employer (admin client — no user_accounts row exists yet)
+        const { data: newEmployee, error: employeeError } = await supabaseAdmin
             .from('employees')
             .insert([{
                 company_id: newCompany.id,
@@ -215,7 +215,7 @@ export const registerEmployer = async (
         if (employeeError) throw employeeError;
 
         // Create salary history
-        await supabase.from('salary_history').insert([{
+        await supabaseAdmin.from('salary_history').insert([{
             employee_id: newEmployee.id,
             effective_date: new Date().toISOString().split('T')[0],
             basic_salary: 50000,
@@ -224,7 +224,7 @@ export const registerEmployer = async (
         }]);
 
         // Create user account
-        await supabase.from('user_accounts').insert([{
+        await supabaseAdmin.from('user_accounts').insert([{
             company_id: newCompany.id,
             email,
             password_hash: passwordHash,
@@ -233,7 +233,7 @@ export const registerEmployer = async (
         }]);
 
         // Create default leave policy
-        await supabase.from('leave_policies').insert([{
+        await supabaseAdmin.from('leave_policies').insert([{
             company_id: newCompany.id,
             base_vacation_days_per_year: 15,
             base_sick_days_per_year: 10,
