@@ -365,6 +365,7 @@ export const getEmployeeById = async (id: string): Promise<Employee | undefined>
             .from('employees')
             .select('*')
             .eq('id', id)
+            .eq('company_id', currentCompanyId!)
             .maybeSingle();
 
         if (error || !data) return undefined;
@@ -382,6 +383,7 @@ export const getUserAccountByEmployeeId = async (employeeId: string): Promise<Us
             .from('user_accounts')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .maybeSingle();
 
         if (error || !data) return undefined;
@@ -626,6 +628,7 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
                 updated_at: new Date().toISOString(),
             })
             .eq('id', updatedEmployee.id)
+            .eq('company_id', currentCompanyId!)
             .select()
             .single();
 
@@ -744,7 +747,8 @@ export const updateSalaryRecord = async (
                 other_benefits: otherBenefits,
                 hourly_rate: hourlyRate ?? null,
             })
-            .eq('id', salaryRecordId);
+            .eq('id', salaryRecordId)
+            .in('employee_id', supabase.from('employees').select('id').eq('company_id', currentCompanyId!));
 
         if (error) throw error;
     } catch (error: any) {
@@ -763,7 +767,8 @@ export const deleteSalaryRecord = async (salaryRecordId: string): Promise<void> 
         const { error } = await supabase
             .from('salary_history')
             .delete()
-            .eq('id', salaryRecordId);
+            .eq('id', salaryRecordId)
+            .in('employee_id', supabase.from('employees').select('id').eq('company_id', currentCompanyId!));
 
         if (error) throw error;
     } catch (error: any) {
@@ -779,13 +784,15 @@ export const deleteEmployee = async (employeeId: string): Promise<void> => {
         await supabase
             .from('user_accounts')
             .delete()
-            .eq('employee_id', employeeId);
+            .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!);
 
         // Delete employee record (cascading deletes will handle related records)
         const { error } = await supabase
             .from('employees')
             .delete()
-            .eq('id', employeeId);
+            .eq('id', employeeId)
+            .eq('company_id', currentCompanyId!);
 
         if (error) throw error;
     } catch (error: any) {
@@ -988,7 +995,8 @@ export const getShifts = async (): Promise<Shift[]> => {
         await ensureUserContext();
         const { data, error } = await supabase
             .from('shifts')
-            .select('*');
+            .select('*')
+            .eq('company_id', currentCompanyId!);
 
         if (error) throw error;
         return (data || []).map((s: any) => ({
@@ -1009,6 +1017,7 @@ export const getHolidays = async (): Promise<Holiday[]> => {
         const { data, error } = await supabase
             .from('holidays')
             .select('*')
+            .eq('company_id', currentCompanyId!)
             .order('date', { ascending: true });
 
         if (error) throw error;
@@ -1031,6 +1040,7 @@ export const getRequests = async (): Promise<AppRequest[]> => {
         const { data, error } = await supabase
             .from('requests')
             .select('*')
+            .eq('company_id', currentCompanyId!)
             .order('date_filed', { ascending: false });
 
         if (error) throw error;
@@ -1113,6 +1123,7 @@ export const addRequest = async (requestData: Omit<AppRequest, 'id' | 'status' |
                         .from('notification_settings')
                         .select('notify_on_request')
                         .eq('user_id', employer.employee_id)
+                        .eq('company_id', currentCompanyId!)
                         .maybeSingle();
 
                     if (!settings || settings.notify_on_request !== false) {
@@ -1154,7 +1165,8 @@ export const getAttendance = async (startDate?: string, endDate?: string): Promi
         await ensureUserContext();
         let query = supabase
             .from('attendance_records')
-            .select('*');
+            .select('*')
+            .eq('company_id', currentCompanyId!);
 
         if (startDate) {
             query = query.gte('clock_in_time', `${startDate}T00:00:00`);
@@ -1196,6 +1208,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .is('clock_out_time', null)
             .order('clock_in_time', { ascending: false })
             .limit(1)
@@ -1222,6 +1235,7 @@ export const getTodaysAttendance = async (employeeId: string): Promise<Attendanc
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .gte('clock_in_time', `${today}T00:00:00Z`)
             .lte('clock_in_time', `${today}T23:59:59Z`)
             .order('clock_in_time', { ascending: false })
@@ -1264,6 +1278,7 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .gte('clock_in_time', `${today}T00:00:00Z`)
             .lte('clock_in_time', `${today}T23:59:59Z`)
             .order('clock_in_time', { ascending: true });
@@ -1278,6 +1293,7 @@ export const getTodaysAllAttendance = async (employeeId: string): Promise<Attend
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .lt('clock_in_time', `${today}T00:00:00Z`)
             .is('clock_out_time', null)
             .order('clock_in_time', { ascending: false })
@@ -1325,6 +1341,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
         .from('attendance_records')
         .select('id, clock_in_time')
         .eq('employee_id', record.employeeId)
+        .eq('company_id', companyId)
         .is('clock_out_time', null)
         .maybeSingle();
 
@@ -1338,6 +1355,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
         .from('attendance_records')
         .select('id')
         .eq('employee_id', record.employeeId)
+        .eq('company_id', companyId)
         .gte('clock_in_time', `${today}T00:00:00Z`)
         .lte('clock_in_time', `${today}T23:59:59Z`);
 
@@ -1426,6 +1444,7 @@ export const clockIn = async (record: Omit<AttendanceRecord, 'id'>, companyId: s
                 .from('notification_settings')
                 .select('notify_on_clock_in')
                 .eq('user_id', employer.employee_id)
+                .eq('company_id', companyId)
                 .maybeSingle();
 
             if (!settings || settings.notify_on_clock_in !== false) {
@@ -1516,6 +1535,7 @@ export const clockOut = async (
                         .from('notification_settings')
                         .select('notify_on_clock_out')
                         .eq('user_id', employer.employee_id)
+                        .eq('company_id', employee.company_id)
                         .maybeSingle();
 
                     if (!settings || settings.notify_on_clock_out !== false) {
@@ -1601,6 +1621,7 @@ export const calculateLeaveBalance = async (employeeId: string): Promise<LeaveBa
             .from('requests')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .eq('request_type', RequestType.LEAVE)
             .eq('status', RequestStatus.APPROVED);
 
@@ -1653,6 +1674,7 @@ export const getTasksForEmployee = async (employeeId: string): Promise<Task[]> =
             .from('tasks')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .order('due_date', { ascending: true });
 
         if (error) throw error;
@@ -1685,6 +1707,7 @@ export const updateTask = async (task: Task): Promise<Task> => {
                 date_completed: task.dateCompleted,
             })
             .eq('id', task.id)
+            .eq('company_id', currentCompanyId!)
             .select()
             .single();
 
@@ -1790,6 +1813,7 @@ export const updateHoliday = async (holiday: Holiday): Promise<Holiday> => {
                 holiday_type: holiday.type || 'Regular',
             })
             .eq('id', holiday.id)
+            .eq('company_id', currentCompanyId!)
             .select()
             .single();
 
@@ -1814,7 +1838,8 @@ export const deleteHoliday = async (holidayId: string): Promise<void> => {
         const { error } = await supabase
             .from('holidays')
             .delete()
-            .eq('id', holidayId);
+            .eq('id', holidayId)
+            .eq('company_id', currentCompanyId!);
 
         if (error) throw error;
     } catch (error) {
@@ -1829,6 +1854,7 @@ export const getCustomHolidayTypes = async (): Promise<string[]> => {
         const { data, error } = await supabase
             .from('custom_holiday_types')
             .select('type_name')
+            .eq('company_id', currentCompanyId!)
             .order('type_name', { ascending: true });
 
         if (error) throw error;
@@ -1888,6 +1914,7 @@ export const changePassword = async (employeeId: string, currentPassword: string
             .from('user_accounts')
             .select('password_hash')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .maybeSingle();
 
         if (!account) {
@@ -1904,7 +1931,8 @@ export const changePassword = async (employeeId: string, currentPassword: string
         const { error } = await supabase
             .from('user_accounts')
             .update({ password_hash: hashedPassword })
-            .eq('employee_id', employeeId);
+            .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!);
 
         if (error) {
             console.error('Error updating password:', error);
@@ -1960,6 +1988,7 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             .from('requests')
             .update({ status })
             .eq('id', requestId)
+            .eq('company_id', currentCompanyId!)
             .select()
             .maybeSingle();
 
@@ -1983,7 +2012,8 @@ export const updateRequestStatus = async (requestId: string, status: RequestStat
             const { error: employeeUpdateError } = await supabase
                 .from('employees')
                 .update(updateData)
-                .eq('id', data.employee_id);
+                .eq('id', data.employee_id)
+                .eq('company_id', currentCompanyId!);
 
             if (employeeUpdateError) {
                 console.error('Error updating employee:', employeeUpdateError);
@@ -2099,7 +2129,8 @@ export const updateAttendance = async (record: AttendanceRecord, reason: string,
                 end_of_day_notes: record.endOfDayNotes || null,
                 manual_entry_reason: reason,
             })
-            .eq('id', record.id);
+            .eq('id', record.id)
+            .eq('company_id', currentCompanyId!);
 
         if (error) throw error;
     } catch (error) {
@@ -2228,7 +2259,8 @@ export const deleteShift = async (shiftId: string): Promise<void> => {
         const { error } = await supabase
             .from('shifts')
             .delete()
-            .eq('id', shiftId);
+            .eq('id', shiftId)
+            .eq('company_id', currentCompanyId!);
 
         if (error) throw error;
     } catch (error) {
@@ -2248,6 +2280,7 @@ export const updateShift = async (shift: Shift): Promise<Shift> => {
                 end_time: shift.endTime,
             })
             .eq('id', shift.id)
+            .eq('company_id', currentCompanyId!)
             .select()
             .single();
 
@@ -2597,6 +2630,7 @@ export const getEmployeePassword = async (employeeId: string): Promise<string | 
             .from('user_accounts')
             .select('password_hash')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .maybeSingle();
 
         return account?.password_hash || null;
@@ -2614,7 +2648,8 @@ export const updateEmployeePassword = async (employeeId: string, newPassword: st
         const { error } = await supabase
             .from('user_accounts')
             .update({ password_hash: hashedPassword })
-            .eq('employee_id', employeeId);
+            .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!);
 
         if (error) {
             console.error('Error updating employee password:', error);
@@ -2828,6 +2863,7 @@ export const getNotificationSettings = async (userId: string): Promise<any> => {
             .from('notification_settings')
             .select('*')
             .eq('user_id', userId)
+            .eq('company_id', currentCompanyId!)
             .maybeSingle();
 
         if (error) throw error;
@@ -3032,12 +3068,14 @@ export const analyzeAttendanceForPayroll = async (params: {
             .from('attendance_records')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .gte('clock_in_time', `${periodStart}T00:00:00+08:00`)
             .lte('clock_in_time', `${periodEnd}T23:59:59+08:00`),
         supabase
             .from('requests')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .eq('request_type', 'Overtime')
             .eq('status', 'Approved')
             .gte('date', periodStart)
@@ -3046,6 +3084,7 @@ export const analyzeAttendanceForPayroll = async (params: {
             .from('requests')
             .select('*')
             .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!)
             .eq('request_type', 'Leave')
             .eq('status', 'Approved')
             .lte('start_date', periodEnd)
@@ -3490,7 +3529,8 @@ export const getDeMinimisForPeriodEmployee = async (
             .from('payroll_de_minimis')
             .select('*')
             .eq('period_id', periodId)
-            .eq('employee_id', employeeId);
+            .eq('employee_id', employeeId)
+            .eq('company_id', currentCompanyId!);
         if (error) throw error;
         return (data ?? []).map((r: any) => ({
             id: r.id,
@@ -3531,7 +3571,8 @@ export const upsertDeMinimisItem = async (item: {
             .delete()
             .eq('period_id', item.periodId)
             .eq('employee_id', item.employeeId)
-            .eq('benefit_type', item.benefitType);
+            .eq('benefit_type', item.benefitType)
+            .eq('company_id', currentCompanyId!);
 
         const { data, error } = await supabase
             .from('payroll_de_minimis')
@@ -3632,13 +3673,15 @@ export const updatePayrollPeriodStatus = async (periodId: string, status: Payrol
             await supabase
                 .from('payroll_records')
                 .update({ status: 'Paid', updated_at: new Date().toISOString() })
-                .eq('period_id', periodId);
+                .eq('period_id', periodId)
+                .eq('company_id', currentCompanyId!);
         }
         if (status === 'Draft' || status === 'Finalized') {
             await supabase
                 .from('payroll_records')
                 .update({ status: 'Draft', updated_at: new Date().toISOString() })
-                .eq('period_id', periodId);
+                .eq('period_id', periodId)
+                .eq('company_id', currentCompanyId!);
         }
     } catch (err) {
         console.error('updatePayrollPeriodStatus error:', err);
@@ -3653,6 +3696,7 @@ export const markEmployeesPaid = async (periodId: string, employeeIds: string[])
             .from('payroll_records')
             .update({ status: 'Paid', updated_at: new Date().toISOString() })
             .eq('period_id', periodId)
+            .eq('company_id', currentCompanyId!)
             .in('employee_id', employeeIds);
 
         // If all records in this period are now Paid, mark the period itself as Paid
@@ -3660,6 +3704,7 @@ export const markEmployeesPaid = async (periodId: string, employeeIds: string[])
             .from('payroll_records')
             .select('id')
             .eq('period_id', periodId)
+            .eq('company_id', currentCompanyId!)
             .neq('status', 'Paid');
         if (!remaining || remaining.length === 0) {
             await supabase.rpc('update_payroll_period_status', {
@@ -3677,8 +3722,8 @@ export const deletePayrollPeriod = async (periodId: string): Promise<void> => {
     try {
         if (!currentCompanyId) return;
         await ensureUserContext();
-        await supabase.from('payroll_adjustments').delete().eq('period_id', periodId);
-        await supabase.from('payroll_records').delete().eq('period_id', periodId);
+        await supabase.from('payroll_adjustments').delete().eq('period_id', periodId).eq('company_id', currentCompanyId!);
+        await supabase.from('payroll_records').delete().eq('period_id', periodId).eq('company_id', currentCompanyId!);
         await supabase.rpc('delete_payroll_period', {
             p_period_id:  periodId,
             p_company_id: currentCompanyId,
@@ -4037,13 +4082,13 @@ export const getAttendanceDetailForPeriod = async (params: {
     const { employeeId, periodStart, periodEnd, shift, workSchedule, gracePeriodMinutes, holidays } = params;
 
     const [{ data: rawRecords }, { data: rawOTRequests }, { data: rawLeaveRequests }] = await Promise.all([
-        supabase.from('attendance_records').select('*').eq('employee_id', employeeId)
+        supabase.from('attendance_records').select('*').eq('employee_id', employeeId).eq('company_id', currentCompanyId!)
             .gte('clock_in_time', `${periodStart}T00:00:00+08:00`)
             .lte('clock_in_time', `${periodEnd}T23:59:59+08:00`),
-        supabase.from('requests').select('*').eq('employee_id', employeeId)
+        supabase.from('requests').select('*').eq('employee_id', employeeId).eq('company_id', currentCompanyId!)
             .eq('request_type', 'Overtime').eq('status', 'Approved')
             .gte('date', periodStart).lte('date', periodEnd),
-        supabase.from('requests').select('*').eq('employee_id', employeeId)
+        supabase.from('requests').select('*').eq('employee_id', employeeId).eq('company_id', currentCompanyId!)
             .eq('request_type', 'Leave').eq('status', 'Approved')
             .lte('start_date', periodEnd).gte('end_date', periodStart),
     ]);
