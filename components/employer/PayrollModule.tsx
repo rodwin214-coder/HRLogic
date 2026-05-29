@@ -596,17 +596,17 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
         const val = parseFloat(v) || 0;
         setForm(prev => {
             const next = { ...prev, [k]: val };
-            if (ATTENDANCE_KEYS.includes(k)) {
-                if (debounceRef.current) clearTimeout(debounceRef.current);
-                debounceRef.current = setTimeout(() => {
-                    recompute(next, totalExemptRef.current, totalExcessRef.current);
-                }, 600);
-            }
             if (LOAN_KEYS.includes(k)) {
                 next.netPay = recalcNetWithLoans(next);
             }
             return next;
         });
+        if (ATTENDANCE_KEYS.includes(k)) {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => {
+                recompute(formRef.current, totalExemptRef.current, totalExcessRef.current);
+            }, 600);
+        }
     };
 
     const handleAddDeMinimis = async () => {
