@@ -3414,10 +3414,9 @@ export const computeEmployeePayroll = async (params: {
     const undertimeDeduction = isPartTime ? 0 : undertimeMinutes * minuteRate;
 
     // ── OT & Holiday Premiums (PH Labor Code) ────────────────────────────────
-    // OT pay is suppressed when holiday hours are present — holiday pay already covers the full day.
+    // OT and holiday premiums are independent — they come from different days in the period.
     // Part-time: OT hours paid at base rate (1.0×) — no 25% premium.
-    const isHolidayDay = regularHolidayHours > 0 || specialHolidayHours > 0;
-    const overtimePay       = isHolidayDay ? 0 : isPartTime ? overtimeHours * hourlyRate * 1.0 : overtimeHours * hourlyRate * 1.25;
+    const overtimePay       = isPartTime ? overtimeHours * hourlyRate * 1.0 : overtimeHours * hourlyRate * 1.25;
     const regularHolidayPay = isPartTime ? 0 : regularHolidayHours * hourlyRate * 1.0;
     const specialHolidayPay = isPartTime ? 0 : specialHolidayHours * hourlyRate * 0.30;
     const nightDiffPay      = isPartTime ? 0 : nightDiffHours * hourlyRate * 0.10;
