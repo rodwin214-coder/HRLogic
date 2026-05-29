@@ -2765,6 +2765,7 @@ export const getNotifications = async (userId: string): Promise<any[]> => {
             .from('notifications')
             .select('*')
             .eq('user_id', userId)
+            .eq('company_id', currentCompanyId!)
             .order('created_at', { ascending: false })
             .limit(50);
 
@@ -2797,6 +2798,7 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
             .from('notifications')
             .update({ is_read: true })
             .eq('user_id', userId)
+            .eq('company_id', currentCompanyId!)
             .eq('is_read', false);
 
         if (error) throw error;
