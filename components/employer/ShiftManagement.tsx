@@ -45,8 +45,8 @@ const ShiftManagement: React.FC = () => {
             try {
                 await api.deleteShift(shiftId);
                 await fetchData();
-            } catch (err) {
-                alert('Could not delete shift. It may be assigned to employees.');
+            } catch (err: any) {
+                alert(err?.message || 'Could not delete shift. Please try again.');
             }
         }
     };

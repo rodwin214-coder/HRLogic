@@ -767,11 +767,31 @@ export const deleteSalaryRecord = async (salaryRecordId: string): Promise<void> 
             throw new Error('Company not found. Please log in again.');
         }
 
+        // Verify the record belongs to this company before deleting (defense-in-depth;
+        // RLS also enforces this via the employee_id → employees.company_id chain).
+        const { data: record, error: fetchError } = await supabase
+            .from('salary_history')
+            .select('id, employee_id')
+            .eq('id', salaryRecordId)
+            .maybeSingle();
+
+        if (fetchError) throw fetchError;
+        if (!record) throw new Error('Salary record not found.');
+
+        const { data: emp, error: empError } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('id', record.employee_id)
+            .eq('company_id', currentCompanyId)
+            .maybeSingle();
+
+        if (empError) throw empError;
+        if (!emp) throw new Error('Access denied: record does not belong to your company.');
+
         const { error } = await supabase
             .from('salary_history')
             .delete()
-            .eq('id', salaryRecordId)
-            .in('employee_id', supabase.from('employees').select('id').eq('company_id', currentCompanyId!));
+            .eq('id', salaryRecordId);
 
         if (error) throw error;
     } catch (error: any) {
@@ -2259,6 +2279,21 @@ export const processPayrollAndNotify = async (payrollData: any): Promise<void> =
 export const deleteShift = async (shiftId: string): Promise<void> => {
     try {
         await ensureUserContext();
+
+        // Check if any employees in this company are assigned to this shift.
+        const { data: assigned, error: checkError } = await supabase
+            .from('employees')
+            .select('id')
+            .eq('shift_id', shiftId)
+            .eq('company_id', currentCompanyId!);
+
+        if (checkError) throw checkError;
+
+        const assignedCount = assigned?.length ?? 0;
+        if (assignedCount > 0) {
+            throw new Error(`This shift is assigned to ${assignedCount} employee(s) and cannot be deleted. Please reassign those employees to a different shift first.`);
+        }
+
         const { error } = await supabase
             .from('shifts')
             .delete()
