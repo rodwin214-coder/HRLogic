@@ -503,11 +503,12 @@ interface EditRecordModalProps {
     onSave: (r: PayrollRecord) => void;
     period: PayrollPeriod;
     employerShouldersContributions?: boolean;
+    colaDailyRate?: number;
 }
 
 const DE_MINIMIS_TYPES = Object.entries(DE_MINIMIS_CEILINGS) as [DeMinimisType, { label: string; monthlyCeiling: number; note: string }][];
 
-const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName, onClose, onSave, period, employerShouldersContributions = false }) => {
+const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName, onClose, onSave, period, employerShouldersContributions = false, colaDailyRate = 0 }) => {
     const [form, setForm] = useState({ ...record });
     const [deMinimisItems, setDeMinimisItems] = useState<DeMinimisItem[]>([]);
     const [loadingDM, setLoadingDM] = useState(true);
@@ -571,6 +572,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             deMinimisExcess: excess,
             payFrequency: period.payFrequency,
             employerShouldersContributions,
+            colaDailyRate,
         });
         // Only update derived/computed fields — never overwrite user-editable inputs
         const PRESERVE_KEYS: (keyof PayrollRecord)[] = [
@@ -590,7 +592,7 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
             return next;
         });
         setComputing(false);
-    }, [period.payFrequency, employerShouldersContributions]);
+    }, [period.payFrequency, employerShouldersContributions, colaDailyRate]);
 
     const setN = (k: keyof PayrollRecord, v: string) => {
         const val = parseFloat(v) || 0;
@@ -755,6 +757,17 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, employeeName,
                         <div className="p-4 grid grid-cols-2 gap-3">
                             {field('Allowance (this period)', 'allowance')}
                             {field('Other Benefits (this period)', 'deMinimis')}
+                            {colaDailyRate > 0 && (
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-0.5">COLA (₱{colaDailyRate.toFixed(2)}/day × {form.daysWorked} days)</label>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={Number(form.cola ?? 0).toFixed(2)}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default"
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -2137,6 +2150,7 @@ const PeriodDetail: React.FC<PeriodDetailProps> = ({ period, employees, onBack, 
                     employeeName={(() => { const e = empMap.get(editRecord.employeeId); return e ? `${e.firstName} ${e.lastName}` : ''; })()}
                     period={period}
                     employerShouldersContributions={employerShouldersContributions}
+                    colaDailyRate={empMap.get(editRecord.employeeId)?.colaDailyRate ?? 0}
                     onClose={() => setEditRecord(null)}
                     onSave={updated => {
                         setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));

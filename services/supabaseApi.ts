@@ -354,6 +354,7 @@ const convertDbEmployeeToEmployee = async (dbEmployee: any): Promise<Employee> =
         vacationLeaveAdjustment: parseFloat(dbEmployee.vacation_leave_adjustment || 0),
         sickLeaveAdjustment: parseFloat(dbEmployee.sick_leave_adjustment || 0),
         customFields: dbEmployee.custom_fields || {},
+        colaDailyRate: parseFloat(dbEmployee.cola_daily_rate || 0),
     };
 };
 
@@ -476,6 +477,7 @@ export const getEmployees = async (): Promise<Employee[]> => {
                 vacationLeaveAdjustment: parseFloat(dbEmployee.vacation_leave_adjustment || 0),
                 sickLeaveAdjustment: parseFloat(dbEmployee.sick_leave_adjustment || 0),
                 customFields: dbEmployee.custom_fields || {},
+                colaDailyRate: parseFloat(dbEmployee.cola_daily_rate || 0),
             };
         });
 
@@ -625,6 +627,7 @@ export const updateEmployee = async (updatedEmployee: Employee, editorId: string
                 vacation_leave_adjustment: updatedEmployee.vacationLeaveAdjustment || 0,
                 sick_leave_adjustment: updatedEmployee.sickLeaveAdjustment || 0,
                 custom_fields: updatedEmployee.customFields || {},
+                cola_daily_rate: updatedEmployee.colaDailyRate ?? 0,
                 updated_at: new Date().toISOString(),
             })
             .eq('id', updatedEmployee.id)
@@ -2972,6 +2975,7 @@ function dbRecordToPayrollRecord(r: any): PayrollRecord {
         netPay: Number(r.net_pay),
         status: r.status,
         notes: r.notes ?? '',
+        cola: Number(r.cola ?? 0),
         ytdBasicPay: Number(r.ytd_basic_pay ?? 0),
         ytdGrossPay: Number(r.ytd_gross_pay ?? 0),
         ytdTaxableIncome: Number(r.ytd_taxable_income ?? 0),
@@ -3343,6 +3347,7 @@ export const computeEmployeePayroll = async (params: {
     hourlyRateOverride?: number | null;
     shiftHours?: number;
     employmentType?: string;
+    colaDailyRate?: number;
 }): Promise<Omit<PayrollRecord, 'id' | 'createdAt'>> => {
     const {
         employeeId, companyId, periodId, basicSalary,
@@ -3360,6 +3365,7 @@ export const computeEmployeePayroll = async (params: {
         hourlyRateOverride = null,
         shiftHours = 8,
         employmentType = '',
+        colaDailyRate = 0,
     } = params;
 
     const isPartTime = employmentType === EmploymentType.PART_TIME;
@@ -3409,6 +3415,12 @@ export const computeEmployeePayroll = async (params: {
     const thirteenthMonthAccrued = basicPay / 12;
     const totalDeMinimis = deMinimisExempt + deMinimisExcess;
 
+    // ── COLA ──────────────────────────────────────────────────────────────────
+    // Days present = daysWorked (approved leaves are not absences, so they are
+    // included in daysWorked by the attendance analysis, matching DOLE practice).
+    // Part-time employees receive COLA the same way as regular employees.
+    const cola = colaDailyRate * daysWorked;
+
     // ── Contributions — part-time employees are exempt ───────────────────────
     const monthlySss        = isPartTime ? 0 : await computeSSSContribution(monthlyBasic);
     const monthlyPhilhealth = isPartTime ? 0 : await computePhilHealthContribution(monthlyBasic);
@@ -3427,7 +3439,7 @@ export const computeEmployeePayroll = async (params: {
     const grossPay = basicPay
         + overtimePay + regularHolidayPay + specialHolidayPay + nightDiffPay + restDayPay
         - absentDeduction - lateDeduction - undertimeDeduction
-        + allowance + otherBenefits + totalDeMinimis
+        + allowance + otherBenefits + totalDeMinimis + cola
         + employerContributionsBenefit;
 
     // ── Withholding Tax — BIR Annualized Method (TRAIN Law) ──────────────────
@@ -3475,6 +3487,7 @@ export const computeEmployeePayroll = async (params: {
         otherBenefits,
         deMinimis: totalDeMinimis,
         thirteenthMonthAccrued,
+        cola,
         grossPay,
         sssContribution,
         philhealthContribution,
@@ -3836,6 +3849,7 @@ export const upsertPayrollRecord = async (record: Omit<PayrollRecord, 'id'>): Pr
             p_status:                        record.status,
             p_notes:                         record.notes,
             p_employer_contributions_benefit: record.employerContributionsBenefit,
+            p_cola:                          record.cola ?? 0,
         });
         if (error) throw error;
         const row = Array.isArray(data) ? data[0] : data;
@@ -3915,6 +3929,7 @@ export const generatePayrollForPeriod = async (
             hourlyRateOverride: latestSalary.hourlyRate ?? null,
             shiftHours,
             employmentType: emp.employmentType,
+            colaDailyRate: emp.colaDailyRate ?? 0,
         });
         const saved = await upsertPayrollRecord(computed);
         if (saved) results.push(saved);

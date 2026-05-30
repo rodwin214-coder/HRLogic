@@ -122,6 +122,7 @@ export interface Employee {
     vacationLeaveAdjustment?: number;
     sickLeaveAdjustment?: number;
     customFields?: { [key: string]: string | number | boolean };
+    colaDailyRate?: number; // PHP per day of actual presence; 0 = no COLA
 }
 
 export interface BaseRequest {
@@ -330,6 +331,7 @@ export interface PayrollRecord {
     otherBenefits: number;
     deMinimis: number;
     thirteenthMonthAccrued: number;
+    cola: number; // daily-rate COLA × days present
     grossPay: number;
     // Contributions
     sssContribution: number;

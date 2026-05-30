@@ -347,6 +347,57 @@ const ProfileTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ em
     )
 };
 
+// --- COLA Section (inside Salary Tab) ---
+const ColaSection: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ employee, onUpdate }) => {
+    const { user: editor } = useContext(UserContext);
+    const [rate, setRate] = useState(String(employee.colaDailyRate ?? 0));
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async () => {
+        if (!editor) return;
+        setSaving(true);
+        try {
+            await api.updateEmployee({ ...employee, colaDailyRate: parseFloat(rate) || 0 }, editor.id);
+            await onUpdate();
+        } catch {
+            alert('Failed to save COLA rate.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="border border-blue-100 rounded-xl overflow-hidden mt-2">
+            <div className="bg-blue-50 px-4 py-2.5 flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-semibold text-blue-900">Cost of Living Allowance (COLA)</h3>
+                    <p className="text-xs text-blue-600 mt-0.5">Paid per day of actual attendance · 0 = not applicable</p>
+                </div>
+            </div>
+            <div className="p-4 flex items-end gap-3">
+                <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Daily Rate (₱)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rate}
+                        onChange={e => setRate(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-36"
+                    />
+                </div>
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                    {saving ? 'Saving…' : 'Save'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // --- Salary Tab ---
 const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ employee, onUpdate }) => {
     const { user: editor } = useContext(UserContext);
@@ -624,6 +675,9 @@ const SalaryTab: React.FC<{ employee: Employee; onUpdate: () => void }> = ({ emp
                     </tbody>
                 </table>
             </div>
+
+            {/* COLA Configuration */}
+            <ColaSection employee={employee} onUpdate={onUpdate} />
         </div>
     )
 };
