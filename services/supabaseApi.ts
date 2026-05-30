@@ -262,7 +262,8 @@ export const loginUser = async (
                 const result = await supabase
                     .from('employees')
                     .select('*')
-                    .eq('id', account.employee_id)
+                    .eq('email', email)
+                        .eq('company_id', account.company_id)
                     .maybeSingle();
 
                 employeeData = result.data;
