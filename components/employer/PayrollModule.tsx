@@ -2263,7 +2263,7 @@ const PayrollModule: React.FC = () => {
             {/* Compliance badges */}
             <div className="flex flex-wrap gap-2 mb-6">
                 {[
-                    { label: 'SSS 2024', desc: '4.5% EE · 9.5% ER' },
+                    { label: 'SSS 2025', desc: '4.5% EE · 9.5% ER' },
                     { label: 'PhilHealth 2024', desc: '5% total premium' },
                     { label: 'Pag-IBIG HDMF', desc: '2% EE · 2% ER' },
                     { label: 'BIR TRAIN Law', desc: 'Annualized w/tax' },
