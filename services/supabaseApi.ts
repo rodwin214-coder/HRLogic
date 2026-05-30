@@ -259,7 +259,7 @@ export const loginUser = async (
 
         for (let i = 0; i < 3; i++) {
             try {
-                const result = await supabase
+                const result = await supabaseAdmin
                     .from('employees')
                     .select('*')
                     .eq('email', email)
